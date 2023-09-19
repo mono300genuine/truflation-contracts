@@ -8,4 +8,8 @@ library Errors {
     error InvalidStatus(bytes32 partnerId);
     error InvalidTimestamp();
     error AddLiquidityFailed();
+    error LockDoesNotExist(address user);
+    error LockExpired(address user);
+    error LockExists(address user);
+    error ExceedMaxTime();
 }
