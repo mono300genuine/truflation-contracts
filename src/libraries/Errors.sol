@@ -12,4 +12,9 @@ library Errors {
     error LockExpired(address user);
     error LockExists(address user);
     error ExceedMaxTime();
+    error VestingStarted(uint64 tge);
+    error VestingNotStarted();
+    error InvalidVesting(uint256 id);
+    error UserVestingAlreadySet(address user, uint256 id);
+    error UserVestingDoesNotExists(address user, uint256 id);
 }
