@@ -6,7 +6,7 @@ import "forge-std/Test.sol";
 import "../src/TfiPartner.sol";
 import "../src/StakingRewards.sol";
 import "../src/libraries/Errors.sol";
-import "../src/mock/MockERC20.sol";
+import "./mock/MockERC20.sol";
 import "./interfaces/IUniswapV2Factory.sol";
 
 contract TfiPartnerTest is Test {
@@ -57,10 +57,19 @@ contract TfiPartnerTest is Test {
         );
 
         lpToken = IERC20(uniswapFactory.getPair(address(tfiToken), address(usdtToken)));
-        lpStaking = new StakingRewards(address(this), address(tfiToken), address(lpToken));
+        lpStaking = new StakingRewards(
+            address(this),
+            address(tfiToken),
+            address(lpToken)
+        );
 
-        tfiPartner =
-        new TfiPartner(address(tfiToken), address(usdtToken), address(lpToken), address(lpStaking), address(uniswapRouter));
+        tfiPartner = new TfiPartner(
+            address(tfiToken),
+            address(usdtToken),
+            address(lpToken),
+            address(lpStaking),
+            address(uniswapRouter)
+        );
         tfiPartner.transferOwnership(gov);
 
         tfiToken.mint(address(lpStaking), lpReward);
@@ -78,23 +87,53 @@ contract TfiPartnerTest is Test {
     function testConstructorFailure() external {
         console.log("Should revert if tfiToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TfiPartner(address(0), address(usdtToken), address(lpToken), address(lpStaking), address(uniswapRouter));
+        new TfiPartner(
+            address(0),
+            address(usdtToken),
+            address(lpToken),
+            address(lpStaking),
+            address(uniswapRouter)
+        );
 
         console.log("Should revert if pairToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TfiPartner(address(tfiToken), address(0), address(lpToken), address(lpStaking), address(uniswapRouter));
+        new TfiPartner(
+            address(tfiToken),
+            address(0),
+            address(lpToken),
+            address(lpStaking),
+            address(uniswapRouter)
+        );
 
         console.log("Should revert if lpToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TfiPartner(address(tfiToken), address(usdtToken),address(0),address(lpStaking), address(uniswapRouter));
+        new TfiPartner(
+            address(tfiToken),
+            address(usdtToken),
+            address(0),
+            address(lpStaking),
+            address(uniswapRouter)
+        );
 
         console.log("Should revert if lpToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TfiPartner(address(tfiToken), address(usdtToken), address(lpToken), address(0), address(uniswapRouter));
+        new TfiPartner(
+            address(tfiToken),
+            address(usdtToken),
+            address(lpToken),
+            address(0),
+            address(uniswapRouter)
+        );
 
         console.log("Should revert if uni v2 router is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TfiPartner(address(tfiToken), address(usdtToken), address(lpToken), address(lpStaking), address(0));
+        new TfiPartner(
+            address(tfiToken),
+            address(usdtToken),
+            address(lpToken),
+            address(lpStaking),
+            address(0)
+        );
     }
 
     function testInitiateSuccess() external {

@@ -4,7 +4,8 @@
   "solidity.packageDefaultDependenciesDirectory": "lib",
   "solidity.remappings": [
     "forge-std/=lib/forge-std/src/",
-    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts",
     "@uniswap/v2-periphery/=lib/uniswap-v2-periphery/"
-  ]
+  ],
+  "solidity.formatter": "forge"
 }

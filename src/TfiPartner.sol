@@ -23,19 +23,10 @@ contract TfiPartner is Ownable {
 
     event Paid(bytes32 indexed id, uint256 pairTokenIn, uint256 lpAmount);
 
-    event Ended(
-        bytes32 indexed id,
-        uint256 tfiTokenOut,
-        uint256 pairTokenOut,
-        uint256 tfiReward
-    );
+    event Ended(bytes32 indexed id, uint256 tfiTokenOut, uint256 pairTokenOut, uint256 tfiReward);
 
     event Cancelled(
-        bytes32 indexed id,
-        uint256 tfiTokenOut,
-        uint256 pairTokenOut,
-        uint256 pTokenPaid,
-        uint256 tfiReward
+        bytes32 indexed id, uint256 tfiTokenOut, uint256 pairTokenOut, uint256 pTokenPaid, uint256 tfiReward
     );
 
     enum Status {
@@ -67,19 +58,10 @@ contract TfiPartner is Ownable {
     uint256 public totalLpStaked;
     uint256 public accTfiPerLp; // Accumulated TFI reward per LP token;
 
-    constructor(
-        address _tfiToken,
-        address _pairToken,
-        address _lpToken,
-        address _lpStaking,
-        address _uniV2Router
-    ) {
+    constructor(address _tfiToken, address _pairToken, address _lpToken, address _lpStaking, address _uniV2Router) {
         if (
-            _tfiToken == address(0) ||
-            _pairToken == address(0) ||
-            _lpToken == address(0) ||
-            _lpStaking == address(0) ||
-            _uniV2Router == address(0)
+            _tfiToken == address(0) || _pairToken == address(0) || _lpToken == address(0) || _lpStaking == address(0)
+                || _uniV2Router == address(0)
         ) {
             revert Errors.ZeroAddress();
         }
@@ -102,13 +84,16 @@ contract TfiPartner is Ownable {
     ) external {
         _checkOwner();
 
-        if (period == 0 || pTokenAmount == 0 || tfiAmount == 0)
+        if (period == 0 || pTokenAmount == 0 || tfiAmount == 0) {
             revert Errors.ZeroAmount();
+        }
         if (startTime < block.timestamp) revert Errors.InvalidTimestamp();
-        if (pToken == address(0) || pOwner == address(0))
+        if (pToken == address(0) || pOwner == address(0)) {
             revert Errors.ZeroAddress();
-        if (subscriptions[id].status != Status.None)
+        }
+        if (subscriptions[id].status != Status.None) {
             revert Errors.InvalidStatus(id);
+        }
 
         tfiToken.safeTransferFrom(msg.sender, address(this), tfiAmount);
 
@@ -124,30 +109,20 @@ contract TfiPartner is Ownable {
             status: Status.Initiated
         });
 
-        emit Initiated(
-            id,
-            period,
-            startTime,
-            pToken,
-            pTokenAmount,
-            pOwner,
-            tfiAmount
-        );
+        emit Initiated(id, period, startTime, pToken, pTokenAmount, pOwner, tfiAmount);
     }
 
-    function pay(
-        bytes32 id,
-        uint256 pairTokenMaxIn,
-        uint256 lpTokenMinOut,
-        uint256 deadline
-    ) external {
+    function pay(bytes32 id, uint256 pairTokenMaxIn, uint256 lpTokenMinOut, uint256 deadline) external {
         Subscription storage subscription = subscriptions[id];
-        if (subscription.status != Status.Initiated)
+        if (subscription.status != Status.Initiated) {
             revert Errors.InvalidStatus(id);
-        if (subscription.pOwner != msg.sender)
+        }
+        if (subscription.pOwner != msg.sender) {
             revert Errors.Forbidden(msg.sender);
-        if (subscription.startTime < block.timestamp)
+        }
+        if (subscription.startTime < block.timestamp) {
             revert Errors.InvalidTimestamp();
+        }
 
         subscription.status = Status.Active;
 
@@ -179,69 +154,51 @@ contract TfiPartner is Ownable {
         totalLpStaked += lpAmount;
         subscription.tfiRewardDebt = lpAmount * accTfiPerLp;
 
-        IERC20(subscription.pToken).safeTransferFrom(
-            msg.sender,
-            address(this),
-            subscription.pTokenAmount
-        );
+        IERC20(subscription.pToken).safeTransferFrom(msg.sender, address(this), subscription.pTokenAmount);
 
         emit Paid(id, pairTokenIn, lpAmount);
     }
 
-    function end(
-        bytes32 id,
-        uint256 tfiMinOut,
-        uint256 pairTokenMinOut,
-        uint256 deadline
-    ) external {
+    function end(bytes32 id, uint256 tfiMinOut, uint256 pairTokenMinOut, uint256 deadline) external {
         _checkOwner();
 
         Subscription storage subscription = subscriptions[id];
-        if (subscription.status != Status.Active)
+        if (subscription.status != Status.Active) {
             revert Errors.InvalidStatus(id);
-        if (subscription.startTime + subscription.period >= block.timestamp)
+        }
+        if (subscription.startTime + subscription.period >= block.timestamp) {
             revert Errors.InvalidTimestamp();
+        }
 
         subscription.status = Status.Ended;
 
         _updateRewardDebt();
 
-        uint256 tfiReward = (subscription.lpAmount *
-            accTfiPerLp -
-            subscription.tfiRewardDebt) / 1e18;
+        uint256 tfiReward = (subscription.lpAmount * accTfiPerLp - subscription.tfiRewardDebt) / 1e18;
 
         lpStaking.withdraw(subscription.lpAmount);
 
         totalLpStaked -= subscription.lpAmount;
 
         lpToken.safeApprove(address(uniV2Router), subscription.lpAmount);
-        (uint256 tfiTokenOut, uint256 pairTokenOut) = uniV2Router
-            .removeLiquidity(
-                address(tfiToken),
-                address(pairToken),
-                subscription.lpAmount,
-                tfiMinOut,
-                pairTokenMinOut,
-                subscription.pOwner,
-                deadline
-            );
-
-        IERC20(subscription.pToken).safeTransfer(
-            owner(),
-            subscription.pTokenAmount
+        (uint256 tfiTokenOut, uint256 pairTokenOut) = uniV2Router.removeLiquidity(
+            address(tfiToken),
+            address(pairToken),
+            subscription.lpAmount,
+            tfiMinOut,
+            pairTokenMinOut,
+            subscription.pOwner,
+            deadline
         );
+
+        IERC20(subscription.pToken).safeTransfer(owner(), subscription.pTokenAmount);
         if (tfiReward != 0) {
             tfiToken.safeTransfer(subscription.pOwner, tfiReward);
         }
         emit Ended(id, tfiTokenOut, pairTokenOut, tfiReward);
     }
 
-    function cancel(
-        bytes32 id,
-        uint256 tfiMinOut,
-        uint256 pairTokenMinOut,
-        uint256 deadline
-    ) external {
+    function cancel(bytes32 id, uint256 tfiMinOut, uint256 pairTokenMinOut, uint256 deadline) external {
         _checkOwner();
 
         Subscription storage subscription = subscriptions[id];
@@ -258,9 +215,7 @@ contract TfiPartner is Ownable {
 
             tfiToken.safeTransfer(owner(), tfiAmount);
         } else if (subscription.status == Status.Active) {
-            if (
-                subscription.startTime + subscription.period < block.timestamp
-            ) {
+            if (subscription.startTime + subscription.period < block.timestamp) {
                 revert Errors.InvalidTimestamp();
             }
 
@@ -268,49 +223,34 @@ contract TfiPartner is Ownable {
 
             _updateRewardDebt();
 
-            uint256 tfiReward = (subscription.lpAmount *
-                accTfiPerLp -
-                subscription.tfiRewardDebt) / 1e18;
+            uint256 tfiReward = (subscription.lpAmount * accTfiPerLp - subscription.tfiRewardDebt) / 1e18;
 
             lpStaking.withdraw(subscription.lpAmount);
 
             totalLpStaked -= subscription.lpAmount;
 
             lpToken.safeApprove(address(uniV2Router), subscription.lpAmount);
-            (uint256 tfiTokenOut, uint256 pairTokenOut) = uniV2Router
-                .removeLiquidity(
-                    address(tfiToken),
-                    address(pairToken),
-                    subscription.lpAmount,
-                    tfiMinOut,
-                    pairTokenMinOut,
-                    address(this),
-                    deadline
-                );
+            (uint256 tfiTokenOut, uint256 pairTokenOut) = uniV2Router.removeLiquidity(
+                address(tfiToken),
+                address(pairToken),
+                subscription.lpAmount,
+                tfiMinOut,
+                pairTokenMinOut,
+                address(this),
+                deadline
+            );
 
             tfiToken.safeTransfer(owner(), tfiTokenOut + tfiReward);
             pairToken.safeTransfer(subscription.pOwner, pairTokenOut);
 
-            uint256 spent = subscription.startTime > block.timestamp
-                ? 0
-                : block.timestamp - subscription.startTime;
+            uint256 spent = subscription.startTime > block.timestamp ? 0 : block.timestamp - subscription.startTime;
 
-            uint256 pTokenPaid = (subscription.pTokenAmount * spent) /
-                subscription.period;
+            uint256 pTokenPaid = (subscription.pTokenAmount * spent) / subscription.period;
 
             IERC20(subscription.pToken).safeTransfer(owner(), pTokenPaid);
-            IERC20(subscription.pToken).safeTransfer(
-                subscription.pOwner,
-                subscription.pTokenAmount - pTokenPaid
-            );
+            IERC20(subscription.pToken).safeTransfer(subscription.pOwner, subscription.pTokenAmount - pTokenPaid);
 
-            emit Cancelled(
-                id,
-                tfiTokenOut,
-                pairTokenOut,
-                pTokenPaid,
-                tfiReward
-            );
+            emit Cancelled(id, tfiTokenOut, pairTokenOut, pTokenPaid, tfiReward);
         } else {
             revert Errors.InvalidStatus(id);
         }

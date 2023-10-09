@@ -14,7 +14,13 @@ library Errors {
     error ExceedMaxTime();
     error VestingStarted(uint64 tge);
     error VestingNotStarted();
-    error InvalidVesting(uint256 id);
-    error UserVestingAlreadySet(address user, uint256 id);
-    error UserVestingDoesNotExists(address user, uint256 id);
+    error InvalidVestingCategory(uint256 id);
+    error InvalidVestingInfo(uint256 categoryIdx, uint256 id);
+    error InvalidUserVesting();
+    error UserVestingAlreadySet(uint256 categoryIdx, uint256 vestingId, address user);
+    error UserVestingDoesNotExists(uint256 categoryIdx, uint256 vestingId, address user);
+    error MaxAllocationExceed();
+    error InvalidAmount();
+    error MulticallFailed();
+    error AlreadyVested(uint256 categoryIdx, uint256 vestingId, address user);
 }
