@@ -2,13 +2,13 @@
 pragma solidity 0.8.19;
 
 interface IVotingEscrow {
-    function stakeFor(uint256 amount, uint256 lockupId, uint256 duration, address user) external;
+    function stakeVesting(uint256 amount, uint256 duration, address to) external returns (uint256 lockupId);
 
-    function unstakeFor(uint256 lockupId, address user) external returns (uint256 amount);
+    function unstakeVesting(address user, uint256 lockupId, bool force) external returns (uint256 amount);
 
-    function extendFor(uint256 lockupId, uint256 duration, address user) external;
+    function migrateVestingLock(address oldUser, address newUser, uint256 lockupId)
+        external
+        returns (uint256 newLockupId);
 
-    function migrateLocks(address prevUser, address newUser) external;
-
-    function forceCancel(address user) external;
+    function increaseVestingLock(address user, uint256 lockupId, uint256 amount, uint256 duration) external;
 }

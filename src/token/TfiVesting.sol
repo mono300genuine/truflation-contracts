@@ -20,8 +20,6 @@ contract TfiVesting is Ownable {
     event CancelVesting(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user);
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
     event VeTfiSet(address indexed veTFI);
-    event Locked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
-    event Unlocked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
     struct VestingCategory {
         string category; // Category name
@@ -63,6 +61,9 @@ contract TfiVesting is Ownable {
 
     // User vesting information (category => info => user address => user vesting)
     mapping(uint256 => mapping(uint256 => mapping(address => UserVesting))) public userVestings;
+
+    // Vesting lockup ids (category => info => user address => lockup id)
+    mapping(uint256 => mapping(uint256 => mapping(address => uint256))) public lockupIds;
 
     /**
      * TFI Vesting constructor
@@ -128,11 +129,12 @@ contract TfiVesting is Ownable {
         emit Claimed(categoryId, vestingId, msg.sender, claimableAmount);
     }
 
-    function stake(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 lockupId, uint256 duration)
-        external
-    {
+    function stake(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
         if (amount == 0) {
             revert Errors.ZeroAmount();
+        }
+        if (lockupIds[categoryId][vestingId][msg.sender] != 0) {
+            revert Errors.LockExist();
         }
 
         UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
@@ -144,19 +146,42 @@ contract TfiVesting is Ownable {
         userVesting.locked += amount;
 
         tfiToken.safeIncreaseAllowance(address(veTFI), amount);
-        veTFI.stakeFor(amount, lockupId, duration, msg.sender);
-
-        emit Locked(categoryId, vestingId, msg.sender, amount);
+        uint256 lockupId = veTFI.stakeVesting(amount, duration, msg.sender);
+        lockupIds[categoryId][vestingId][msg.sender] = lockupId + 1;
     }
 
-    function unstake(uint256 categoryId, uint256 vestingId, uint256 lockupId) external {
+    function increaseStaking(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
+        if (amount == 0 && duration == 0) {
+            revert Errors.ZeroAmount();
+        }
+        uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
+        if (lockupId == 0) {
+            revert Errors.LockDoesNotExist();
+        }
+
         UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
 
-        uint256 amount = veTFI.unstakeFor(lockupId, msg.sender);
+        if (amount > userVesting.amount - userVesting.claimed - userVesting.locked) {
+            revert Errors.InvalidAmount();
+        }
+
+        userVesting.locked += amount;
+
+        tfiToken.safeIncreaseAllowance(address(veTFI), amount);
+        veTFI.increaseVestingLock(msg.sender, lockupId - 1, amount, duration);
+    }
+
+    function unstake(uint256 categoryId, uint256 vestingId) external {
+        uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
+        if (lockupId == 0) {
+            revert Errors.LockDoesNotExist();
+        }
+
+        UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
+
+        uint256 amount = veTFI.unstakeVesting(msg.sender, lockupId - 1, false);
 
         userVesting.locked -= amount;
-
-        emit Unlocked(categoryId, vestingId, msg.sender, amount);
     }
 
     /**
@@ -180,8 +205,15 @@ contract TfiVesting is Ownable {
         newVesting.amount = prevVesting.amount;
         newVesting.claimed = prevVesting.claimed;
 
-        if (prevVesting.locked != 0) {
-            veTFI.migrateLocks(prevUser, newUser);
+        uint256 lockupId = lockupIds[categoryId][vestingId][prevUser];
+
+        if (lockupId != 0) {
+            if (lockupIds[categoryId][vestingId][newUser] != 0) {
+                revert Errors.LockExist();
+            }
+            lockupIds[categoryId][vestingId][newUser] = veTFI.migrateVestingLock(prevUser, newUser, lockupId - 1) + 1;
+            delete lockupIds[categoryId][vestingId][prevUser];
+
             newVesting.locked = prevVesting.locked;
         }
         delete userVestings[categoryId][vestingId][prevUser];
@@ -210,8 +242,11 @@ contract TfiVesting is Ownable {
             revert Errors.AlreadyVested(categoryId, vestingId, user);
         }
 
-        if (userVesting.locked != 0) {
-            veTFI.forceCancel(user);
+        uint256 lockupId = lockupIds[categoryId][vestingId][user];
+
+        if (lockupId != 0) {
+            veTFI.unstakeVesting(user, lockupId - 1, true);
+            delete lockupIds[categoryId][vestingId][user];
             userVesting.locked = 0;
         }
 
@@ -319,7 +354,8 @@ contract TfiVesting is Ownable {
         VestingCategory storage category = categories[categoryId];
         UserVesting storage userVesting = userVestings[categoryId][vestingId][user];
 
-        category.allocated += amount - userVesting.amount;
+        category.allocated += amount;
+        category.allocated -= userVesting.amount;
         if (category.allocated > category.maxAllocation) {
             revert Errors.MaxAllocationExceed();
         }
@@ -329,6 +365,10 @@ contract TfiVesting is Ownable {
         }
         userVesting.amount = amount;
         userVesting.startTime = startTime == 0 ? tgeTime : startTime;
+
+        if (userVesting.startTime == 0) {
+            revert Errors.InvalidTimestamp();
+        }
 
         emit UserVestingSet(categoryId, vestingId, user, amount, userVesting.startTime);
     }
@@ -345,9 +385,13 @@ contract TfiVesting is Ownable {
     function multicall(bytes[] calldata payloads) external {
         uint256 len = payloads.length;
         for (uint256 i; i < len;) {
-            (bool success,) = address(this).delegatecall(payloads[i]);
+            (bool success, bytes memory result) = address(this).delegatecall(payloads[i]);
             if (!success) {
-                revert Errors.MulticallFailed();
+                if (result.length < 68) revert();
+                assembly {
+                    result := add(result, 0x04)
+                }
+                revert(abi.decode(result, (string)));
             }
 
             unchecked {

@@ -122,6 +122,7 @@ contract TfiVestingTest is Test {
         uint256 allocated = 1e14;
 
         vm.startPrank(owner);
+        vesting.setTgeTime(uint64(block.timestamp) + 1 days);
         tfiToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15);
@@ -148,6 +149,7 @@ contract TfiVestingTest is Test {
         uint256 allocated = 1e14;
 
         vm.startPrank(owner);
+        vesting.setTgeTime(uint64(block.timestamp) + 1 days);
         tfiToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15);
@@ -174,6 +176,7 @@ contract TfiVestingTest is Test {
         uint256 allocated = 5e14;
 
         vm.startPrank(owner);
+        vesting.setTgeTime(uint64(block.timestamp) + 1 days);
         tfiToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15);
@@ -293,24 +296,236 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
-    // function testSetUserVesting_AddFirstUserVesting() external {
-    //     console.log("Add first user vesting");
+    function testSetUserVesting_AddFirstUserVesting() external {
+        console.log("Add first user vesting");
 
-    //     _setupVestingPlan();
+        _setupVestingPlan();
 
-    //     uint256 amount = 100e18;
-    //     vm.startPrank(owner);
-    //     vesting.setUserVesting(1, 0, alice, 0, amount);
+        uint256 amount = 100e18;
+        uint64 tgeTime = uint64(block.timestamp) + 1 days;
+        vm.startPrank(owner);
+        vesting.setTgeTime(tgeTime);
 
-    //     vm.expectEmit(true, true, true, true, address(vesting));
-    //     emit VestingInfoSet(0, 0, TfiVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
-    //     vesting.setVestingInfo(
-    //         0, type(uint256).max, TfiVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit)
-    //     );
-    //     _validateVestingInfo(0, 0, initialReleasePct, initialReleasePeriod, cliff, period, unit);
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit UserVestingSet(1, 0, alice, amount, tgeTime);
 
-    //     vm.stopPrank();
-    // }
+        vesting.setUserVesting(1, 0, alice, 0, amount);
+
+        _validateUserVesting(1, 0, alice, amount, 0, 0, tgeTime);
+        (,, uint256 allocated) = vesting.categories(1);
+        assertEq(allocated, amount, "Allocated amount is invalid");
+
+        vm.stopPrank();
+    }
+
+    function testSetUserVesting_Revert_WhenCategoryIdIsInvalid() external {
+        console.log("Should revert to set user vesting when categoryId is invalid");
+
+        _setupVestingPlan();
+
+        uint256 amount = 100e18;
+        uint64 tgeTime = uint64(block.timestamp) + 1 days;
+        uint256 categoryId = 4;
+        vm.startPrank(owner);
+        vesting.setTgeTime(tgeTime);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidVestingCategory(uint256)", categoryId));
+        vesting.setUserVesting(categoryId, 0, alice, 0, amount);
+
+        vm.stopPrank();
+    }
+
+    function testSetUserVesting_Revert_WhenVestingIdIsInvalid() external {
+        console.log("Should revert to set user vesting when vestingId is invalid");
+
+        _setupVestingPlan();
+
+        uint256 amount = 100e18;
+        uint64 tgeTime = uint64(block.timestamp) + 1 days;
+        uint256 categoryId = 0;
+        uint256 vestingId = 4;
+        vm.startPrank(owner);
+        vesting.setTgeTime(tgeTime);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidVestingInfo(uint256,uint256)", categoryId, vestingId));
+        vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
+
+        vm.stopPrank();
+    }
+
+    function testSetUserVesting_Revert_WhenMaxAllocationExceed() external {
+        console.log("Should revert to set user vesting when max allocation exceed");
+
+        _setupVestingPlan();
+
+        uint256 amount = 100e18;
+        uint64 tgeTime = uint64(block.timestamp) + 1 days;
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        (, uint256 maxAllocation,) = vesting.categories(categoryId);
+
+        vm.startPrank(owner);
+        vesting.setTgeTime(tgeTime);
+        vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
+
+        vm.expectRevert(abi.encodeWithSignature("MaxAllocationExceed()"));
+        vesting.setUserVesting(categoryId, vestingId, bob, 0, maxAllocation - amount + 1);
+
+        vm.stopPrank();
+    }
+
+    function testSetUserVesting_Revert_WhenNewAmountIsLowerThanClaimedAndLocked() external {
+        console.log("Should revert to reset user vesting amount when it is lower than claimed and locked amount");
+
+        _setupVestingPlan();
+
+        uint256 amount = 100e18;
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(owner);
+        vesting.setTgeTime(uint64(block.timestamp) + 1 days);
+        vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
+
+        vm.warp(block.timestamp + 50 days);
+
+        uint256 claimed = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be non-zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        vesting.claim(categoryId, vestingId);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSignature("InvalidUserVesting()"));
+        vesting.setUserVesting(categoryId, vestingId, alice, 0, claimed - 1);
+
+        vm.stopPrank();
+    }
+
+    function testSetUserVesting_Revert_WhenTgeTimeAndStartTimeAreZero() external {
+        console.log("Should revert to set user vesting when both start time and tge time are zero");
+
+        _setupVestingPlan();
+
+        uint256 amount = 100e18;
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSignature("InvalidTimestamp()"));
+        vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
+
+        vm.stopPrank();
+    }
+
+    function testSetVeTfi() external {
+        console.log("Set veTFI");
+
+        vm.startPrank(owner);
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit VeTfiSet(alice);
+
+        vesting.setVeTfi(alice);
+
+        assertEq(address(vesting.veTFI()), alice, "veTFI is invalid");
+
+        vm.stopPrank();
+    }
+
+    function testSetVeTfiFailure() external {
+        vm.startPrank(owner);
+        console.log("Should revert to set veTFI with zero address");
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        vesting.setVeTfi(address(0));
+
+        vm.stopPrank();
+    }
+
+    function testMulticall() external {
+        console.log("Send multiple transactions through multicall");
+
+        vm.startPrank(owner);
+        tfiToken.approve(address(vesting), type(uint256).max);
+
+        bytes[] memory payloads = new bytes[](2);
+        payloads[0] =
+            abi.encodeWithSignature("setVestingCategory(uint256,string,uint256)", type(uint256).max, "Preseed", 1e20);
+        payloads[1] =
+            abi.encodeWithSignature("setVestingCategory(uint256,string,uint256)", type(uint256).max, "Seed", 2e20);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit VestingCategorySet(0, "Preseed", 1e20);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit VestingCategorySet(1, "Seed", 2e20);
+
+        vesting.multicall(payloads);
+
+        _validateCategory(0, "Preseed", 1e20, 0);
+        _validateCategory(1, "Seed", 2e20, 0);
+        assertEq(tfiToken.balanceOf(address(vesting)), 3e20, "Balance is invalid");
+
+        vm.stopPrank();
+    }
+
+    function testClaim() external {
+        console.log("Claim available amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
+
+        vm.warp(block.timestamp + 50 days);
+
+        uint256 claimed = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be non-zero");
+
+        vm.startPrank(alice);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit Claimed(categoryId, vestingId, alice, claimed);
+
+        vesting.claim(categoryId, vestingId);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be zero");
+        assertEq(tfiToken.balanceOf(alice), claimed, "Claimed amount is incorrect");
+
+        _validateUserVesting(categoryId, vestingId, alice, amount, claimed, 0, startTime);
+
+        vm.stopPrank();
+    }
+
+    function testClaimFailure() external {
+        console.log("Should revert to claim when there is no claimable amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be zero");
+
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
+
+        vesting.claim(categoryId, vestingId);
+
+        vm.stopPrank();
+    }
 
     function _setupVestingPlan() internal {
         vm.startPrank(owner);
@@ -322,6 +537,15 @@ contract TfiVestingTest is Test {
         vesting.setVestingInfo(0, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
         vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
         vesting.setVestingInfo(2, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
+
+        vm.stopPrank();
+    }
+
+    function _setupExampleUserVestings() internal {
+        vm.startPrank(owner);
+
+        vesting.setTgeTime(uint64(block.timestamp) + 1 days);
+        vesting.setUserVesting(0, 0, alice, 0, 100e18);
 
         vm.stopPrank();
     }
@@ -356,13 +580,17 @@ contract TfiVestingTest is Test {
     function _validateUserVesting(
         uint256 categoryId,
         uint256 vestingId,
-        string memory category,
-        uint256 maxAllocation,
-        uint256 allocated
+        address user,
+        uint256 amount,
+        uint256 claimed,
+        uint256 locked,
+        uint64 startTime
     ) internal {
-        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
-        assertEq(_category, category, "Category name is invalid");
-        assertEq(_maxAllocation, maxAllocation, "Max allocation is invalid");
-        assertEq(_allocated, allocated, "Allocated amount is invalid");
+        (uint256 _amount, uint256 _claimed, uint256 _locked, uint64 _startTime) =
+            vesting.userVestings(categoryId, vestingId, user);
+        assertEq(_amount, amount, "Amount is invalid");
+        assertEq(_claimed, claimed, "Claimed amount is invalid");
+        assertEq(_locked, locked, "Locked amount is invalid");
+        assertEq(_startTime, startTime, "Start timestamp is invalid");
     }
 }

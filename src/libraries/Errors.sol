@@ -8,9 +8,6 @@ library Errors {
     error InvalidStatus(bytes32 partnerId);
     error InvalidTimestamp();
     error AddLiquidityFailed();
-    error LockDoesNotExist(address user);
-    error LockExpired(address user);
-    error LockExists(address user);
     error ExceedMaxTime();
     error VestingStarted(uint64 tge);
     error VestingNotStarted();
@@ -21,6 +18,7 @@ library Errors {
     error UserVestingDoesNotExists(uint256 categoryIdx, uint256 vestingId, address user);
     error MaxAllocationExceed();
     error InvalidAmount();
-    error MulticallFailed();
     error AlreadyVested(uint256 categoryIdx, uint256 vestingId, address user);
+    error LockExist();
+    error LockDoesNotExist();
 }
