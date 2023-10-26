@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "./interfaces/IVirtualStakingRewards.sol";
+import "../interfaces/IVirtualStakingRewards.sol";
 
 contract VirtualStakingRewards is IVirtualStakingRewards, ReentrancyGuard, Ownable {
     using SafeMath for uint256;
@@ -19,7 +19,6 @@ contract VirtualStakingRewards is IVirtualStakingRewards, ReentrancyGuard, Ownab
     address public operator;
 
     address public rewardsToken;
-    address public stakingToken;
     uint256 public periodFinish = 0;
     uint256 public rewardRate = 0;
     uint256 public rewardsDuration = 7 days;
@@ -95,7 +94,6 @@ contract VirtualStakingRewards is IVirtualStakingRewards, ReentrancyGuard, Ownab
         require(amount > 0, "Cannot withdraw 0");
         _totalSupply = _totalSupply.sub(amount);
         _balances[user] = _balances[user].sub(amount);
-        IERC20(stakingToken).safeTransfer(user, amount);
         emit Withdrawn(user, amount);
     }
 
@@ -138,7 +136,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, ReentrancyGuard, Ownab
 
     // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        require(tokenAddress != address(stakingToken), "Cannot withdraw the staking token");
+        require(tokenAddress != address(rewardsToken), "Cannot withdraw the reward token");
         IERC20(tokenAddress).safeTransfer(msg.sender, tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
     }

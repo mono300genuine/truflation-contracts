@@ -5,6 +5,8 @@ import "forge-std/console.sol";
 import "forge-std/Test.sol";
 import "../../src/token/TruflationToken.sol";
 import "../../src/token/TfiVesting.sol";
+import "../../src/token/VotingEscrowTfi.sol";
+import "../../src/staking/VirtualStakingRewards.sol";
 import "../mock/MockERC677Receiver.sol";
 
 contract TfiVestingTest is Test {
@@ -15,36 +17,61 @@ contract TfiVestingTest is Test {
     event UserVestingSet(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint64 startTime
     );
-    event MigrateUser(uint256 indexed categoryId, uint256 indexed vestingId, address prevUser, address newUser);
-    event CancelVesting(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user);
+    event MigrateUser(
+        uint256 indexed categoryId, uint256 indexed vestingId, address prevUser, address newUser, uint256 newLockupId
+    );
+    event CancelVesting(
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, bool giveUnclaimed
+    );
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
     event VeTfiSet(address indexed veTFI);
-    event Locked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
-    event Unlocked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
+    event Staked(
+        uint256 indexed categoryId,
+        uint256 indexed vestingId,
+        address indexed user,
+        uint256 amount,
+        uint256 duration,
+        uint256 lockupId
+    );
+    event IncreasedStaking(
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
+    );
+    event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
     TruflationToken public tfiToken;
     TfiVesting public vesting;
+    VotingEscrowTfi public veTFI;
+    VirtualStakingRewards public tfiStakingRewards;
 
     // Users
     address public alice;
     address public bob;
+    address public carol;
     address public owner;
 
     function setUp() public {
         alice = address(uint160(uint256(keccak256(abi.encodePacked("Alice")))));
         bob = address(uint160(uint256(keccak256(abi.encodePacked("Bob")))));
+        carol = address(uint160(uint256(keccak256(abi.encodePacked("Carol")))));
         owner = address(uint160(uint256(keccak256(abi.encodePacked("Owner")))));
 
         vm.label(alice, "Alice");
         vm.label(bob, "Bob");
+        vm.label(carol, "Carol");
         vm.label(owner, "Owner");
+
+        vm.warp(1696816730);
 
         vm.startPrank(owner);
         tfiToken = new TruflationToken();
         vesting = new TfiVesting(tfiToken);
-        vm.stopPrank();
+        tfiStakingRewards = new VirtualStakingRewards(owner, address(tfiToken));
+        veTFI =
+        new VotingEscrowTfi(address(tfiToken), address(vesting), block.timestamp, 1 hours, address(tfiStakingRewards));
+        tfiStakingRewards.setOperator(address(veTFI));
+        vesting.setVeTfi(address(veTFI));
 
-        vm.warp(1696816730);
+        vm.stopPrank();
     }
 
     function testConstructorSuccess() external {
@@ -527,6 +554,598 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testStake() external {
+        console.log("Stake vesting to veTFI");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
+
+        (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
+
+        uint256 tfiBalanceBefore = tfiToken.balanceOf(address(vesting));
+
+        vm.startPrank(alice);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit Staked(categoryId, vestingId, alice, stakeAmount, duration, 1);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount, "Staked amount is invalid");
+        assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore - stakeAmount, "Remaining balance is invalid");
+
+        (uint128 lockupAmount,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+
+        assertEq(lockupAmount, stakeAmount, "Lockup amount is invalid");
+        assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
+
+        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount, startTime);
+        assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
+
+        vm.stopPrank();
+    }
+
+    function testStake_Revert_WhenAmountIsZero() external {
+        console.log("Revert to stake vesting when amount is zero");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 duration = 30 days;
+
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
+        vesting.stake(categoryId, vestingId, 0, duration);
+
+        vm.stopPrank();
+    }
+
+    function testStake_Revert_WhenLockExists() external {
+        console.log("Revert to stake vesting when lock already exists");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 100e18;
+        uint256 duration = 30 days;
+
+        vm.startPrank(alice);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        vm.expectRevert(abi.encodeWithSignature("LockExist()"));
+        vesting.stake(categoryId, vestingId, 100, duration);
+
+        vm.stopPrank();
+    }
+
+    function testStake_Revert_WhenAmountIsGreaterThanRemaining() external {
+        console.log("Revert to stake vesting when amount is greater than remaining vesting amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 duration = 30 days;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        uint256 claimed = vesting.claim(categoryId, vestingId);
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
+
+        vesting.stake(categoryId, vestingId, amount - claimed + 1, duration);
+
+        vm.stopPrank();
+    }
+
+    function testIncreaseStaking() external {
+        console.log("Increase staking amount and duration");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 increaseAmount = 20e18;
+        uint256 duration = 30 days;
+        uint256 increaseDuration = 50 days;
+
+        (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
+
+        uint256 tfiBalanceBefore = tfiToken.balanceOf(address(vesting));
+
+        vm.startPrank(alice);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit IncreasedStaking(categoryId, vestingId, alice, increaseAmount, increaseDuration);
+
+        vesting.increaseStaking(categoryId, vestingId, increaseAmount, increaseDuration);
+
+        assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount + increaseAmount, "Staked amount is invalid");
+        assertEq(
+            tfiToken.balanceOf(address(vesting)),
+            tfiBalanceBefore - stakeAmount - increaseAmount,
+            "Remaining balance is invalid"
+        );
+
+        (uint128 lockupAmount,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+
+        assertEq(lockupAmount, stakeAmount + increaseAmount, "Lockup amount is invalid");
+        assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
+
+        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount + increaseAmount, startTime);
+        assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
+
+        vm.stopPrank();
+    }
+
+    function testIncreaseStaking_Revert_WhenLockDoesNotExists() external {
+        console.log("Revert to increase staking when lock does not exist");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("LockDoesNotExist()"));
+        vesting.increaseStaking(categoryId, vestingId, 100, 30 days);
+
+        vm.stopPrank();
+    }
+
+    function testIncreaseStaking_Revert_WhenAmountIsGreaterThanRemaining() external {
+        console.log("Revert to increase staking when amount is greater than remaining vesting amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        uint256 claimed = vesting.claim(categoryId, vestingId);
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
+
+        vesting.increaseStaking(categoryId, vestingId, amount - stakeAmount - claimed + 1, duration);
+
+        vm.stopPrank();
+    }
+
+    function testUnstake() external {
+        console.log("Unstake from veTFI");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
+
+        (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
+
+        vm.startPrank(alice);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        uint256 tfiBalanceBefore = tfiToken.balanceOf(address(vesting));
+
+        vm.warp(block.timestamp + duration + 1);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit Unstaked(categoryId, vestingId, alice, stakeAmount);
+
+        vesting.unstake(categoryId, vestingId);
+
+        assertEq(tfiToken.balanceOf(address(veTFI)), 0, "Staked amount is invalid");
+        assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore + stakeAmount, "Remaining balance is invalid");
+
+        (uint128 lockupAmount,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+
+        assertEq(lockupAmount, 0, "Lockup should was not deleted");
+        assertEq(lockupIsVesting, false, "Lockup should was not deleted");
+
+        _validateUserVesting(categoryId, vestingId, alice, amount, 0, 0, startTime);
+        assertEq(vesting.lockupIds(categoryId, vestingId, alice), 0, "Lockup id is invalid");
+
+        vm.stopPrank();
+    }
+
+    function testUnstake_Revert_WhenLockDoesNotExist() external {
+        console.log("Revert to unstake when lock does not exist");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("LockDoesNotExist()"));
+        vesting.unstake(categoryId, vestingId);
+
+        vm.stopPrank();
+    }
+
+    function testMigrateUser_WhenNoLock() external {
+        console.log("Migrate vesting when lock does not exist");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        vesting.claim(categoryId, vestingId);
+
+        (uint256 amount, uint256 claimed,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
+        assertNotEq(claimed, 0, "Claimed amount should be non-zero");
+
+        vm.warp(block.timestamp + 30 days);
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should be non-zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(owner);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit MigrateUser(categoryId, vestingId, alice, carol, 0);
+
+        vesting.migrateUser(categoryId, vestingId, alice, carol);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
+        assertEq(
+            vesting.claimable(categoryId, vestingId, carol),
+            claimable,
+            "Claimable amount for new user should be migrated"
+        );
+
+        _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
+        _validateUserVesting(categoryId, vestingId, carol, amount, claimed, 0, startTime);
+
+        vm.stopPrank();
+    }
+
+    function testMigrateUser_WhenLocked() external {
+        console.log("Migrate vesting when some tokens have been locked");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+        vesting.claim(categoryId, vestingId);
+
+        (uint256 amount, uint256 claimed,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
+        assertNotEq(claimed, 0, "Claimed amount should be non-zero");
+
+        vm.warp(block.timestamp + 30 days);
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should be non-zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(owner);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit MigrateUser(categoryId, vestingId, alice, carol, 1);
+
+        vesting.migrateUser(categoryId, vestingId, alice, carol);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
+        assertEq(
+            vesting.claimable(categoryId, vestingId, carol),
+            claimable,
+            "Claimable amount for new user should be migrated"
+        );
+        assertEq(vesting.lockupIds(categoryId, vestingId, alice), 0, "Prev user lockup id should be zero");
+        assertEq(vesting.lockupIds(categoryId, vestingId, carol), 1, "Lockup id should be migrated");
+
+        _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
+        _validateUserVesting(categoryId, vestingId, carol, amount, claimed, stakeAmount, startTime);
+
+        vm.stopPrank();
+    }
+
+    function testMigrateUser_Revert_WhenSenderIsNotOwner() external {
+        console.log("Revert when msg.sender is not owner");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(alice);
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        vesting.migrateUser(categoryId, vestingId, alice, carol);
+
+        vm.stopPrank();
+    }
+
+    function testMigrateUser_Revert_WhenNewUserHasVesting() external {
+        console.log("Revert when new user has vesting in same category and vesting id");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(owner);
+
+        vm.expectRevert(
+            abi.encodeWithSignature("UserVestingAlreadySet(uint256,uint256,address)", categoryId, vestingId, bob)
+        );
+        vesting.migrateUser(categoryId, vestingId, alice, bob);
+
+        vm.stopPrank();
+    }
+
+    function testMigrateUser_Revert_WhenPrevUserDoesNotHaveVesting() external {
+        console.log("Revert when user does not have vesting");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(owner);
+
+        vm.expectRevert(
+            abi.encodeWithSignature("UserVestingDoesNotExists(uint256,uint256,address)", categoryId, vestingId, carol)
+        );
+        vesting.migrateUser(categoryId, vestingId, carol, owner);
+
+        vm.stopPrank();
+    }
+
+    function testCancelVesting_ByTakingClaimableTokens() external {
+        console.log("Cancel vesting and remove uncalimed amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        vesting.claim(categoryId, vestingId);
+
+        (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
+        assertNotEq(claimed, 0, "Claimed amount should be non-zero");
+
+        vm.warp(block.timestamp + 30 days);
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should be non-zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(owner);
+
+        uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
+
+        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit CancelVesting(categoryId, vestingId, alice, false);
+
+        vesting.cancelVesting(categoryId, vestingId, alice, false);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
+
+        _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
+        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed - amount);
+        assertEq(tfiToken.balanceOf(address(vesting)), vestingBalanceBefore, "Token does not move after cancel");
+
+        vm.stopPrank();
+    }
+
+    function testCancelVesting_ByGivingClaimableTokens() external {
+        console.log("Cancel vesting and give current vested amount to user");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        vesting.claim(categoryId, vestingId);
+
+        (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
+        assertNotEq(claimed, 0, "Claimed amount should be non-zero");
+
+        vm.warp(block.timestamp + 30 days);
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should be non-zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(owner);
+
+        uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
+
+        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit CancelVesting(categoryId, vestingId, alice, true);
+
+        vesting.cancelVesting(categoryId, vestingId, alice, true);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
+
+        _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
+        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed + claimable - amount);
+        assertEq(
+            tfiToken.balanceOf(address(vesting)), vestingBalanceBefore - claimable, "Token does not move after cancel"
+        );
+        assertEq(tfiToken.balanceOf(alice), claimed + claimable, "User should receive unclaimed tokens");
+
+        vm.stopPrank();
+    }
+
+    function testCancelVesting_WhenLocked() external {
+        console.log("Cancel vesting when some tokens have been locked");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        vesting.claim(categoryId, vestingId);
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
+        assertNotEq(claimed, 0, "Claimed amount should be non-zero");
+
+        vm.warp(block.timestamp + 30 days);
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should be non-zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(owner);
+
+        uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
+
+        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
+
+        assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit CancelVesting(categoryId, vestingId, alice, false);
+
+        vesting.cancelVesting(categoryId, vestingId, alice, false);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
+
+        _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
+        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed - amount);
+        assertEq(
+            tfiToken.balanceOf(address(vesting)), vestingBalanceBefore + stakeAmount, "Token does not move after cancel"
+        );
+        assertEq(vesting.lockupIds(categoryId, vestingId, alice), 0, "Lockup id should be zero");
+
+        vm.stopPrank();
+    }
+
+    function testCancelVesting_Revert_WhenSenderIsNotOwner() external {
+        console.log("Revert when msg.sender is not owner");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(alice);
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        vesting.migrateUser(categoryId, vestingId, alice, carol);
+
+        vm.stopPrank();
+    }
+
+    function testCancelVesting_Revert_WhenNewUserHasVesting() external {
+        console.log("Revert when new user has vesting in same category and vesting id");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(owner);
+
+        vm.expectRevert(
+            abi.encodeWithSignature("UserVestingAlreadySet(uint256,uint256,address)", categoryId, vestingId, bob)
+        );
+        vesting.migrateUser(categoryId, vestingId, alice, bob);
+
+        vm.stopPrank();
+    }
+
+    function testCancelVesting_Revert_WhenPrevUserDoesNotHaveVesting() external {
+        console.log("Revert when user does not have vesting");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(owner);
+
+        vm.expectRevert(
+            abi.encodeWithSignature("UserVestingDoesNotExists(uint256,uint256,address)", categoryId, vestingId, carol)
+        );
+        vesting.migrateUser(categoryId, vestingId, carol, owner);
+
+        vm.stopPrank();
+    }
+
     function _setupVestingPlan() internal {
         vm.startPrank(owner);
 
@@ -546,6 +1165,7 @@ contract TfiVestingTest is Test {
 
         vesting.setTgeTime(uint64(block.timestamp) + 1 days);
         vesting.setUserVesting(0, 0, alice, 0, 100e18);
+        vesting.setUserVesting(0, 0, bob, 0, 200e18);
 
         vm.stopPrank();
     }

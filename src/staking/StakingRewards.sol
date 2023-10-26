@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "./interfaces/IStakingRewards.sol";
+import "../interfaces/IStakingRewards.sol";
 
 contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable {
     using SafeMath for uint256;

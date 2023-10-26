@@ -4,7 +4,7 @@ pragma solidity 0.8.19;
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 import "../src/TfiPartner.sol";
-import "../src/StakingRewards.sol";
+import "../src/staking/StakingRewards.sol";
 import "../src/libraries/Errors.sol";
 import "./mock/MockERC20.sol";
 import "./interfaces/IUniswapV2Factory.sol";

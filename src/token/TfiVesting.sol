@@ -16,10 +16,26 @@ contract TfiVesting is Ownable {
     event UserVestingSet(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint64 startTime
     );
-    event MigrateUser(uint256 indexed categoryId, uint256 indexed vestingId, address prevUser, address newUser);
-    event CancelVesting(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user);
+    event MigrateUser(
+        uint256 indexed categoryId, uint256 indexed vestingId, address prevUser, address newUser, uint256 newLockupId
+    );
+    event CancelVesting(
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, bool giveUnclaimed
+    );
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
     event VeTfiSet(address indexed veTFI);
+    event Staked(
+        uint256 indexed categoryId,
+        uint256 indexed vestingId,
+        address indexed user,
+        uint256 amount,
+        uint256 duration,
+        uint256 lockupId
+    );
+    event IncreasedStaking(
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
+    );
+    event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
     struct VestingCategory {
         string category; // Category name
@@ -146,14 +162,13 @@ contract TfiVesting is Ownable {
         userVesting.locked += amount;
 
         tfiToken.safeIncreaseAllowance(address(veTFI), amount);
-        uint256 lockupId = veTFI.stakeVesting(amount, duration, msg.sender);
-        lockupIds[categoryId][vestingId][msg.sender] = lockupId + 1;
+        uint256 lockupId = veTFI.stakeVesting(amount, duration, msg.sender) + 1;
+        lockupIds[categoryId][vestingId][msg.sender] = lockupId;
+
+        emit Staked(categoryId, vestingId, msg.sender, amount, duration, lockupId);
     }
 
     function increaseStaking(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
-        if (amount == 0 && duration == 0) {
-            revert Errors.ZeroAmount();
-        }
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
             revert Errors.LockDoesNotExist();
@@ -169,6 +184,8 @@ contract TfiVesting is Ownable {
 
         tfiToken.safeIncreaseAllowance(address(veTFI), amount);
         veTFI.increaseVestingLock(msg.sender, lockupId - 1, amount, duration);
+
+        emit IncreasedStaking(categoryId, vestingId, msg.sender, amount, duration);
     }
 
     function unstake(uint256 categoryId, uint256 vestingId) external {
@@ -177,11 +194,14 @@ contract TfiVesting is Ownable {
             revert Errors.LockDoesNotExist();
         }
 
-        UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
-
         uint256 amount = veTFI.unstakeVesting(msg.sender, lockupId - 1, false);
 
+        UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
+
         userVesting.locked -= amount;
+        delete lockupIds[categoryId][vestingId][msg.sender];
+
+        emit Unstaked(categoryId, vestingId, msg.sender, amount);
     }
 
     /**
@@ -204,21 +224,21 @@ contract TfiVesting is Ownable {
 
         newVesting.amount = prevVesting.amount;
         newVesting.claimed = prevVesting.claimed;
+        newVesting.startTime = prevVesting.startTime;
 
         uint256 lockupId = lockupIds[categoryId][vestingId][prevUser];
+        uint256 newLockupId;
 
         if (lockupId != 0) {
-            if (lockupIds[categoryId][vestingId][newUser] != 0) {
-                revert Errors.LockExist();
-            }
-            lockupIds[categoryId][vestingId][newUser] = veTFI.migrateVestingLock(prevUser, newUser, lockupId - 1) + 1;
+            newLockupId = veTFI.migrateVestingLock(prevUser, newUser, lockupId - 1) + 1;
+            lockupIds[categoryId][vestingId][newUser] = newLockupId;
             delete lockupIds[categoryId][vestingId][prevUser];
 
             newVesting.locked = prevVesting.locked;
         }
         delete userVestings[categoryId][vestingId][prevUser];
 
-        emit MigrateUser(categoryId, vestingId, prevUser, newUser);
+        emit MigrateUser(categoryId, vestingId, prevUser, newUser, newLockupId);
     }
 
     /**
@@ -232,7 +252,7 @@ contract TfiVesting is Ownable {
         external
         onlyOwner
     {
-        UserVesting storage userVesting = userVestings[categoryId][vestingId][user];
+        UserVesting memory userVesting = userVestings[categoryId][vestingId][user];
 
         if (userVesting.amount == 0) {
             revert Errors.UserVestingDoesNotExists(categoryId, vestingId, user);
@@ -265,7 +285,7 @@ contract TfiVesting is Ownable {
         VestingCategory storage category = categories[categoryId];
         category.allocated -= unvested;
 
-        emit CancelVesting(categoryId, vestingId, user);
+        emit CancelVesting(categoryId, vestingId, user, giveUnclaimed);
     }
 
     /**

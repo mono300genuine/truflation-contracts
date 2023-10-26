@@ -68,14 +68,14 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     constructor(
         address _tfiToken,
         address _tfiVesting,
-        uint256 epoch_,
-        uint256 minStakeDuration_,
+        uint256 _epoch,
+        uint256 _minStakeDuration,
         address _stakingRewards
     ) ERC20("Voting Escrowed TFI", "veTFI") ERC20Permit("veTFI") {
         tfiToken = IERC20(_tfiToken);
         tfiVesting = _tfiVesting;
-        epoch = epoch_;
-        minStakeDuration = minStakeDuration_;
+        epoch = _epoch;
+        minStakeDuration = _minStakeDuration;
         stakingRewards = IVirtualStakingRewards(_stakingRewards);
     }
 
@@ -214,7 +214,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         uint256 points = lockup.points;
         require(end != 0, "Already unstaked this lockup");
         require(force || block.timestamp >= end, "End of lockup not reached");
-        delete lockups[msg.sender][lockupId]; // Keeps empty in array, so indexes are stable
+        delete lockups[user][lockupId]; // Keeps empty in array, so indexes are stable
 
         stakingRewards.withdraw(user, points);
         _burn(user, points);
