@@ -7,23 +7,46 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
 import {Errors} from "../libraries/Errors.sol";
 
+/**
+ * @title TFI vesting contract
+ * @author Ryuhei Matsuda
+ * @notice Admin register vesting information for users,
+ *      and users could lock vesting to veTFI to get voting power and TFI staking rewards
+ */
 contract TfiVesting is Ownable {
     using SafeERC20 for IERC20;
 
+    /// @dev Emitted when TGE time set
     event TgeTimeSet(uint64 tgeTime);
+
+    /// @dev Emitted when vesting category is set
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation);
+
+    /// @dev Emitted when vesting info is set
     event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, VestingInfo info);
+
+    /// @dev Emitted when user vesting info is set
     event UserVestingSet(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint64 startTime
     );
+
+    /// @dev Emitted when admin migrates user's vesting to another address
     event MigrateUser(
         uint256 indexed categoryId, uint256 indexed vestingId, address prevUser, address newUser, uint256 newLockupId
     );
+
+    /// @dev Emitted when admin cancel user's vesting
     event CancelVesting(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, bool giveUnclaimed
     );
+
+    /// @dev Emitted when user claimed vested TFI tokens
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
+
+    /// @dev Emitted when veTFI token has been set
     event VeTfiSet(address indexed veTFI);
+
+    /// @dev Emitted when user stakes vesting to veTFI
     event Staked(
         uint256 indexed categoryId,
         uint256 indexed vestingId,
@@ -32,17 +55,23 @@ contract TfiVesting is Ownable {
         uint256 duration,
         uint256 lockupId
     );
+
+    /// @dev Emitted when user increased veTFI staking period or amount
     event IncreasedStaking(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
     );
+
+    /// @dev Emitted when user unstakes from veTFI
     event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
+    /// @dev Vesting Category struct
     struct VestingCategory {
         string category; // Category name
         uint256 maxAllocation; // Maximum allocation for this category
         uint256 allocated; // Current allocated amount
     }
 
+    /// @dev Vesting info struct
     struct VestingInfo {
         uint64 initialReleasePct; // Initial Release percentage
         uint64 initialReleasePeriod; // Initial release period after TGE
@@ -51,6 +80,7 @@ contract TfiVesting is Ownable {
         uint64 unit; // The period to claim. ex. montlhy or 6 monthly
     }
 
+    /// @dev User vesting info struct
     struct UserVesting {
         uint256 amount; // Total vesting amount
         uint256 claimed; // Total claimed amount
@@ -60,29 +90,29 @@ contract TfiVesting is Ownable {
 
     uint256 public constant DENOMINATOR = 10000;
 
-    // TFI token address
+    /// @dev TFI token address
     IERC20 public immutable tfiToken;
 
-    // veTFI token address
+    /// @dev veTFI token address
     IVotingEscrow public veTFI;
 
-    // TGE timestamp
+    /// @dev TGE timestamp
     uint64 public tgeTime;
 
-    // Vesting categories
+    /// @dev Vesting categories
     VestingCategory[] public categories;
 
-    // Vesting info per category
+    /// @dev Vesting info per category
     mapping(uint256 => VestingInfo[]) public vestingInfos;
 
-    // User vesting information (category => info => user address => user vesting)
+    /// @dev User vesting information (category => info => user address => user vesting)
     mapping(uint256 => mapping(uint256 => mapping(address => UserVesting))) public userVestings;
 
-    // Vesting lockup ids (category => info => user address => lockup id)
+    /// @dev Vesting lockup ids (category => info => user address => lockup id)
     mapping(uint256 => mapping(uint256 => mapping(address => uint256))) public lockupIds;
 
     /**
-     * TFI Vesting constructor
+     * @notice TFI Vesting constructor
      * @param _tfiToken TFI token address
      */
     constructor(IERC20 _tfiToken) {
@@ -91,6 +121,13 @@ contract TfiVesting is Ownable {
         tfiToken = _tfiToken;
     }
 
+    /**
+     * @notice Calcualte claimable amount (total vested amount - previously claimed amount - locked amount)
+     * @param categoryId Vesting category id
+     * @param vestingId Vesting id
+     * @param user user address
+     * @return claimableAmount Claimable amount
+     */
     function claimable(uint256 categoryId, uint256 vestingId, address user)
         public
         view
@@ -129,9 +166,10 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * Claim available amount
+     * @notice Claim available amount
      * @param categoryId category id
      * @param vestingId vesting id
+     * @return claimableAmount Claimable amount
      */
     function claim(uint256 categoryId, uint256 vestingId) public returns (uint256 claimableAmount) {
         claimableAmount = claimable(categoryId, vestingId, msg.sender);
@@ -145,6 +183,13 @@ contract TfiVesting is Ownable {
         emit Claimed(categoryId, vestingId, msg.sender, claimableAmount);
     }
 
+    /**
+     * @notice Stake vesting to veTFI to get voting power and get staking TFI rewards
+     * @param categoryId category id
+     * @param vestingId vesting id
+     * @param amount amount to stake
+     * @param duration lock period in seconds
+     */
     function stake(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
         if (amount == 0) {
             revert Errors.ZeroAmount();
@@ -168,6 +213,13 @@ contract TfiVesting is Ownable {
         emit Staked(categoryId, vestingId, msg.sender, amount, duration, lockupId);
     }
 
+    /**
+     * @notice Increase veTFI staking amount and period
+     * @param categoryId category id
+     * @param vestingId vesting id
+     * @param amount amount to increase
+     * @param duration lock period from now
+     */
     function increaseStaking(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
@@ -188,6 +240,11 @@ contract TfiVesting is Ownable {
         emit IncreasedStaking(categoryId, vestingId, msg.sender, amount, duration);
     }
 
+    /**
+     * @notice Unstake vesting from veTFI
+     * @param categoryId category id
+     * @param vestingId vesting id
+     */
     function unstake(uint256 categoryId, uint256 vestingId) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
@@ -205,7 +262,8 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * Migrate owner of vesting. Used when user lost his private key
+     * @notice Migrate owner of vesting. Used when user lost his private key
+     * @dev Only admin can migrate users vesting
      * @param categoryId Category id
      * @param vestingId Vesting id
      * @param prevUser previous user address
@@ -242,7 +300,8 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * Cancel vesting and force cancel from voting escrow
+     * @notice Cancel vesting and force cancel from voting escrow
+     * @dev Only admin can cancel users vesting
      * @param categoryId Category id
      * @param vestingId Vesting id
      * @param user user address
@@ -289,8 +348,9 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * Set TGE timestamp
-     * @param _tgeTime new TGE timestamp
+     * @notice Set TGE timestamp
+     * @dev Only admin can set tge time
+     * @param _tgeTime new TGE timestamp in seconds
      */
     function setTgeTime(uint64 _tgeTime) external onlyOwner {
         if (tgeTime != 0 && tgeTime < block.timestamp) {
@@ -307,7 +367,8 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * Add or modify vesting category
+     * @notice Add or modify vesting category
+     * @dev Only admin can set vesting category
      * @param id id to modify or uint256.max to add new category
      * @param category new vesting category
      */
@@ -336,7 +397,8 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * Add or modify vesting information
+     * @notice Add or modify vesting information
+     * @dev Only admin can set vesting info
      * @param categoryIdx category id
      * @param id id to modify or uint256.max to add new info
      * @param info new vesting info
@@ -353,7 +415,9 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * Set user vesting amount
+     * @notice Set user vesting amount
+     * @dev Only admin can set user vesting
+     * @dev It will be failed if it exceeds max allocation
      * @param categoryId category id
      * @param vestingId vesting id
      * @param user user address
@@ -393,6 +457,11 @@ contract TfiVesting is Ownable {
         emit UserVestingSet(categoryId, vestingId, user, amount, userVesting.startTime);
     }
 
+    /**
+     * @notice Set veTFI token
+     * @dev Only admin can set veTFI
+     * @param _veTFI veTFI token address
+     */
     function setVeTfi(address _veTFI) external onlyOwner {
         if (_veTFI == address(0)) {
             revert Errors.ZeroAddress();
@@ -402,6 +471,11 @@ contract TfiVesting is Ownable {
         emit VeTfiSet(_veTFI);
     }
 
+    /**
+     * @notice Multicall several functions in single transaction
+     * @dev Could be for setting vesting categories, vesting info, and user vesting in single transaction at once
+     * @param payloads list of payloads
+     */
     function multicall(bytes[] calldata payloads) external {
         uint256 len = payloads.length;
         for (uint256 i; i < len;) {
