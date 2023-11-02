@@ -34,14 +34,6 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     /// @dev Maximum duration
     uint256 public constant MAX_DURATION = 365 days * 3; // 3 years
 
-    /// @dev Lockup struct
-    struct Lockup {
-        uint128 amount; // Locked amount
-        uint128 end; // Lock end timestamp in seconds
-        uint256 points; // veTFI points
-        bool isVesting; // True if locked from vesting
-    }
-
     /// @dev lockup list per users
     mapping(address => Lockup[]) public lockups;
 
@@ -60,23 +52,6 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     // For existing stakers with delegation set, This will remain `false`
     // unless the user calls `delegate()` method.
     mapping(address => bool) public hasDelegationSet;
-
-    // Events
-    /// @dev Emitted when user staked TFI or vesting
-    event Stake(
-        address indexed user, bool indexed isVesting, uint256 lockupId, uint256 amount, uint256 end, uint256 points
-    );
-
-    /// @dev Emitted when user unstaked
-    event Unstake(
-        address indexed user, bool indexed isVesting, uint256 lockupId, uint256 amount, uint256 end, uint256 points
-    );
-
-    /// @dev Emitted when lockup migrated to another user (for vesting only)
-    event Migrated(address indexed oldUser, address indexed newUser, uint256 oldLockupId, uint256 newLockupId);
-
-    /// @dev Emitted when lockup cancelled (for vesting only)
-    event Cancelled(address indexed user, uint256 lockupId, uint256 amount, uint256 points);
 
     modifier onlyVesting() {
         require(msg.sender == tfiVesting, "not vesting");

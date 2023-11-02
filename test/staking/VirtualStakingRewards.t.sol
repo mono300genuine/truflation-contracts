@@ -14,7 +14,6 @@ contract VirtualStakingRewardsTest is Test {
     // Users
     address public alice;
     address public bob;
-    address public carol;
     address public owner;
     address public operator;
     address public rewardsDistribuion;
@@ -22,14 +21,12 @@ contract VirtualStakingRewardsTest is Test {
     function setUp() public {
         alice = address(uint160(uint256(keccak256(abi.encodePacked("Alice")))));
         bob = address(uint160(uint256(keccak256(abi.encodePacked("Bob")))));
-        carol = address(uint160(uint256(keccak256(abi.encodePacked("Carol")))));
         owner = address(uint160(uint256(keccak256(abi.encodePacked("Owner")))));
         operator = address(uint160(uint256(keccak256(abi.encodePacked("Operator")))));
         rewardsDistribuion = address(uint160(uint256(keccak256(abi.encodePacked("RewardsDistribuion")))));
 
         vm.label(alice, "Alice");
         vm.label(bob, "Bob");
-        vm.label(carol, "Carol");
         vm.label(owner, "Owner");
         vm.label(operator, "Operator");
         vm.label(rewardsDistribuion, "RewardsDistribuion");
