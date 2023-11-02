@@ -7,10 +7,8 @@ import "../../src/token/TruflationToken.sol";
 import "../../src/token/TfiVesting.sol";
 import "../../src/token/VotingEscrowTfi.sol";
 import "../../src/staking/VirtualStakingRewards.sol";
-import "../mock/MockERC677Receiver.sol";
 
 contract TfiVestingTest is Test {
-    event Transfer(address indexed from, address indexed to, uint256 value, bytes data);
     event TgeTimeSet(uint64 tgeTime);
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation);
     event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, TfiVesting.VestingInfo info);
