@@ -8,6 +8,7 @@ library Errors {
     error Forbidden(address sender);
     error InvalidTimestamp();
     error InvalidAmount();
+    error InvalidAccount();
 
     // partner contracts
     error InvalidStatus(bytes32 partnerId);
@@ -29,4 +30,16 @@ library Errors {
     // staking
     error RewardPeriodNotFinished();
     error InsufficientRewards();
+
+    // veTFI
+    error TransferDisabled();
+    error MaxPointsExceeded();
+    error NoAccess();
+    error LockupAlreadyUnstaked();
+    error LockupNotEnded();
+    error NewDurationMustBeLonger();
+    error NotIncrease();
+    error NotMigrate();
+    error TooShort();
+    error TooLong();
 }

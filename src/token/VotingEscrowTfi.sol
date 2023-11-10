@@ -9,7 +9,7 @@ import {PRBMathUD60x18} from "paulrberg/prb-math/contracts/PRBMathUD60x18.sol";
 import {RewardsSource} from "../interfaces/RewardsSource.sol";
 import {IVirtualStakingRewards} from "../interfaces/IVirtualStakingRewards.sol";
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
-
+import {Errors} from "../libraries/Errors.sol";
 /**
  * @title VotingEscrowTFI smart contract (modified from Origin Staking for Truflation)
  * @author Ryuhei Matsuda
@@ -19,6 +19,7 @@ import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
  * The balance received for staking (and thus the voting power and rewards
  * distribution) goes up exponentially by the end of the staked period.
  */
+
 contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     using SafeERC20 for IERC20;
 
@@ -46,15 +47,10 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     /// @dev TFI Vesting contract address
     address public immutable tfiVesting;
 
-    // Used to track any calls to `delegate()` method. When this isn't
-    // set to true, voting powers are delegated to the receiver of the stake
-    // when `stake()` or `extend()` method are called.
-    // For existing stakers with delegation set, This will remain `false`
-    // unless the user calls `delegate()` method.
-    mapping(address => bool) public hasDelegationSet;
-
     modifier onlyVesting() {
-        require(msg.sender == tfiVesting, "not vesting");
+        if (msg.sender != tfiVesting) {
+            revert Errors.Forbidden(msg.sender);
+        }
         _;
     }
 
@@ -75,7 +71,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     function _transfer(address, address, uint256) internal override {
-        revert("Transfer disabled");
+        revert Errors.TransferDisabled();
     }
 
     // 2. Staking and Lockup Functions
@@ -108,6 +104,9 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         onlyVesting
         returns (uint256 lockupId)
     {
+        if (to == tfiVesting) {
+            revert Errors.InvalidAccount();
+        }
         lockupId = _stake(amount, duration, to, true);
     }
 
@@ -135,13 +134,21 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
      * @return lockupId Lockup id
      */
     function _stake(uint256 amount, uint256 duration, address to, bool isVesting) internal returns (uint256 lockupId) {
-        require(to != address(0), "To the zero address");
-        require(amount <= type(uint128).max, "Too much");
-        require(amount > 0, "Not enough");
+        if (to == address(0)) {
+            revert Errors.ZeroAddress();
+        }
+        if (amount == 0) {
+            revert Errors.ZeroAmount();
+        }
+        if (amount > type(uint128).max) {
+            revert Errors.InvalidAmount();
+        }
 
         // duration checked inside previewPoints
         (uint256 points, uint256 end) = previewPoints(amount, duration);
-        require(points + totalSupply() <= type(uint192).max, "Max points exceeded");
+        if (points + totalSupply() > type(uint192).max) {
+            revert Errors.MaxPointsExceeded();
+        }
 
         lockups[to].push(
             Lockup({
@@ -151,11 +158,13 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
                 isVesting: isVesting
             })
         );
-        stakingRewards.stake(to, points);
-        _mint(to, points);
+
         tfiToken.safeTransferFrom(msg.sender, address(this), amount); // Important that it's sender
 
-        if (!hasDelegationSet[to] && delegates(to) == address(0)) {
+        stakingRewards.stake(to, points);
+        _mint(to, points);
+
+        if (delegates(to) == address(0)) {
             // Delegate voting power to the receiver, if unregistered
             _delegate(to, to);
         }
@@ -185,60 +194,6 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Migrate lock to another user
-     * @param oldUser Old user address
-     * @param newUser New user address
-     * @param lockupId the id of the old user's lockup to migrate
-     * @return newLockupId the id of new user's migrated lockup
-     */
-    function migrateVestingLock(address oldUser, address newUser, uint256 lockupId)
-        external
-        onlyVesting
-        returns (uint256 newLockupId)
-    {
-        Lockup memory oldLockup = lockups[oldUser][lockupId];
-        require(oldLockup.isVesting, "Not vesting");
-
-        require(oldLockup.points != 0, "Old user does not have lock");
-
-        stakingRewards.exit(oldUser);
-        uint256 points = oldLockup.points;
-        _burn(oldUser, points);
-
-        newLockupId = lockups[newUser].length;
-        lockups[newUser].push(oldLockup);
-        _mint(newUser, points);
-        stakingRewards.stake(newUser, points);
-
-        delete lockups[oldUser][lockupId];
-
-        emit Migrated(oldUser, newUser, lockupId, newLockupId);
-    }
-
-    /**
-     * @notice Interal function to unstake
-     * @param user User address
-     * @param lockupId the id of the lockup to unstake
-     * @param isVesting flag to stake with vested tokens or not
-     * @param force unstake before end period (used to force unstake for vesting lock)
-     */
-    function _unstake(address user, uint256 lockupId, bool isVesting, bool force) internal returns (uint256 amount) {
-        Lockup memory lockup = lockups[user][lockupId];
-        require(lockup.isVesting == isVesting, "No access");
-        amount = lockup.amount;
-        uint256 end = lockup.end;
-        uint256 points = lockup.points;
-        require(end != 0, "Already unstaked this lockup");
-        require(force || block.timestamp >= end, "End of lockup not reached");
-        delete lockups[user][lockupId]; // Keeps empty in array, so indexes are stable
-
-        stakingRewards.withdraw(user, points);
-        _burn(user, points);
-        tfiToken.safeTransfer(msg.sender, amount); // Sender is msg.sender
-        emit Unstake(user, isVesting, lockupId, amount, end, points);
-    }
-
-    /**
      * @notice Increase lock amount or duration
      *
      * @param lockupId the id of the old lockup to extend
@@ -263,6 +218,107 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     /**
+     * @notice Migrate lock to another user
+     * @param oldUser Old user address
+     * @param newUser New user address
+     * @param lockupId the id of the old user's lockup to migrate
+     * @return newLockupId the id of new user's migrated lockup
+     */
+    function migrateVestingLock(address oldUser, address newUser, uint256 lockupId)
+        external
+        onlyVesting
+        returns (uint256 newLockupId)
+    {
+        if (oldUser == newUser) {
+            revert Errors.NotMigrate();
+        }
+        if (newUser == address(0)) {
+            revert Errors.ZeroAddress();
+        }
+        Lockup memory oldLockup = lockups[oldUser][lockupId];
+        if (!oldLockup.isVesting) {
+            revert Errors.NoAccess();
+        }
+
+        uint256 points = oldLockup.points;
+        stakingRewards.withdraw(oldUser, points);
+        _burn(oldUser, points);
+
+        newLockupId = lockups[newUser].length;
+        lockups[newUser].push(oldLockup);
+        _mint(newUser, points);
+        stakingRewards.stake(newUser, points);
+
+        delete lockups[oldUser][lockupId];
+
+        emit Migrated(oldUser, newUser, lockupId, newLockupId);
+    }
+
+    /**
+     * @notice Claim TFI staking rewards
+     */
+    function claimReward() external {
+        stakingRewards.getReward(msg.sender);
+    }
+
+    /**
+     * @notice Preview the number of points that would be returned for the
+     * given amount and duration.
+     *
+     * @param amount TFI to be staked
+     * @param duration number of seconds to stake for
+     * @return points staking points that would be returned
+     * @return end staking period end date
+     */
+    function previewPoints(uint256 amount, uint256 duration) public view returns (uint256, uint256) {
+        if (duration < minStakeDuration) {
+            revert Errors.TooShort();
+        }
+        if (duration > MAX_DURATION) {
+            revert Errors.TooLong();
+        }
+        uint256 start = block.timestamp > epoch ? block.timestamp : epoch;
+        uint256 end = start + duration;
+        uint256 endYearpoc = ((end - epoch) * 1e18) / 365 days;
+        uint256 multiplier = PRBMathUD60x18.pow(YEAR_BASE, endYearpoc);
+        return ((amount * multiplier) / 1e18, end);
+    }
+
+    /**
+     * @notice Interal function to unstake
+     * @param user User address
+     * @param lockupId the id of the lockup to unstake
+     * @param isVesting flag to stake with vested tokens or not
+     * @param force unstake before end period (used to force unstake for vesting lock)
+     */
+    function _unstake(address user, uint256 lockupId, bool isVesting, bool force) internal returns (uint256 amount) {
+        Lockup memory lockup = lockups[user][lockupId];
+        if (lockup.isVesting != isVesting) {
+            revert Errors.NoAccess();
+        }
+        amount = lockup.amount;
+        uint256 end = lockup.end;
+        uint256 points = lockup.points;
+        if (end == 0) {
+            revert Errors.LockupAlreadyUnstaked();
+        }
+        if (!force && block.timestamp < end) {
+            revert Errors.LockupNotEnded();
+        }
+        delete lockups[user][lockupId]; // Keeps empty in array, so indexes are stable
+
+        stakingRewards.withdraw(user, points);
+        _burn(user, points);
+        tfiToken.safeTransfer(msg.sender, amount); // Sender is msg.sender
+
+        emit Unstake(user, isVesting, lockupId, amount, end, points);
+
+        if (block.timestamp < end) {
+            emit Cancelled(user, lockupId, amount, points);
+        }
+    }
+
+    /**
      * @notice Increase lock amount or duration
      *
      * The stake end time is computed from the current time + duration, just
@@ -283,22 +339,31 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     function _increaseLock(address user, uint256 lockupId, uint256 amount, uint256 duration, bool isVesting) internal {
         // duration checked inside previewPoints
         Lockup memory lockup = lockups[user][lockupId];
-        require(lockup.isVesting == isVesting, "No access");
+        if (lockup.isVesting != isVesting) {
+            revert Errors.NoAccess();
+        }
         uint256 oldAmount = lockup.amount;
         uint256 oldEnd = lockup.end;
         uint256 oldPoints = lockup.points;
 
         uint256 newAmount = oldAmount += amount;
-        require(newAmount <= type(uint128).max, "Too much");
+        if (newAmount > type(uint128).max) {
+            revert Errors.InvalidAmount();
+        }
 
         if (amount != 0) {
             tfiToken.safeTransferFrom(msg.sender, address(this), amount); // Sender is msg.sender
         }
 
         (uint256 newPoints, uint256 newEnd) = previewPoints(newAmount, duration);
-        require(newEnd >= oldEnd, "New lockup must be longer");
+        if (newEnd < oldEnd) {
+            revert Errors.NewDurationMustBeLonger();
+        }
+        if (newPoints <= oldPoints) {
+            revert Errors.NotIncrease();
+        }
+
         uint256 mintAmount = newPoints - oldPoints;
-        require(newPoints > oldPoints, "Not increase");
 
         lockup.end = uint128(newEnd);
         lockup.amount = uint128(newAmount);
@@ -308,47 +373,8 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
 
         stakingRewards.stake(user, mintAmount);
         _mint(user, mintAmount);
-        if (!hasDelegationSet[user] && delegates(user) == address(0)) {
-            // Delegate voting power to the receiver, if unregistered
-            _delegate(user, user);
-        }
+
         emit Unstake(user, isVesting, lockupId, oldAmount, oldEnd, oldPoints);
         emit Stake(user, isVesting, lockupId, newAmount, newEnd, newPoints);
-    }
-
-    /**
-     * @notice Preview the number of points that would be returned for the
-     * given amount and duration.
-     *
-     * @param amount TFI to be staked
-     * @param duration number of seconds to stake for
-     * @return points staking points that would be returned
-     * @return end staking period end date
-     */
-    function previewPoints(uint256 amount, uint256 duration) public view returns (uint256, uint256) {
-        require(duration >= minStakeDuration, "Too short");
-        require(duration <= MAX_DURATION, "Too long");
-        uint256 start = block.timestamp > epoch ? block.timestamp : epoch;
-        uint256 end = start + duration;
-        uint256 endYearpoc = ((end - epoch) * 1e18) / 365 days;
-        uint256 multiplier = PRBMathUD60x18.pow(YEAR_BASE, endYearpoc);
-        return ((amount * multiplier) / 1e18, end);
-    }
-
-    /**
-     * @notice Claim TFI staking rewards
-     */
-    function claimReward() external {
-        stakingRewards.getReward(msg.sender);
-    }
-
-    /**
-     * @dev Change delegation for `delegator` to `delegatee`.
-     *
-     * Emits events {DelegateChanged} and {DelegateVotesChanged}.
-     */
-    function _delegate(address delegator, address delegatee) internal override {
-        hasDelegationSet[delegator] = true;
-        super._delegate(delegator, delegatee);
     }
 }
