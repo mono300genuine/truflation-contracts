@@ -6,7 +6,7 @@ import "forge-std/Test.sol";
 import "../../src/token/TruflationToken.sol";
 import "../mock/MockERC677Receiver.sol";
 
-contract TfiPartnerTest is Test {
+contract TruflationTokenTest is Test {
     event Transfer(address indexed from, address indexed to, uint256 value, bytes data);
 
     TruflationToken public tfiToken;

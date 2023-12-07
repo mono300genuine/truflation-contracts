@@ -32,6 +32,10 @@ contract DeployTokenAndVesting is Script {
         tfiStakingRewards.setOperator(address(veTFI));
         vesting.setVeTfi(address(veTFI));
 
+        tfiStakingRewards.setRewardsDuration(30 days);
+        tfiToken.transfer(address(tfiStakingRewards), 100_000e18);
+        tfiStakingRewards.notifyRewardAmount(100_000e18);
+
         vm.stopBroadcast();
     }
 }
