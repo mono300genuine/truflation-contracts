@@ -48,10 +48,6 @@ contract TruflationTokenCCIP is ERC677Token, Ownable2Step {
         _burn(msg.sender, amount);
     }
 
-    function burnFrom(address account, uint256 amount) external onlyCcipPool {
-        _burn(account, amount);
-    }
-
     /**
      * Set CCIP pool contract
      * @notice Only owner can set

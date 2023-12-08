@@ -109,27 +109,4 @@ contract TruflationTokenCCIPTest is Test {
         assertEq(tfiToken.balanceOf(ccipPool), 900, "Tokens should be burned");
         vm.stopPrank();
     }
-
-    function testBurnFrom() external {
-        vm.startPrank(ccipPool);
-        tfiToken.mint(alice, 1000);
-        vm.stopPrank();
-
-        console.log("Should revert to burn by non-ccipPool");
-        vm.startPrank(alice);
-        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-
-        tfiToken.burnFrom(alice, 100);
-        vm.stopPrank();
-
-        vm.startPrank(ccipPool);
-        console.log("Burn by ccip pool");
-
-        vm.expectEmit(true, true, true, true, address(tfiToken));
-        emit Transfer(alice, address(0), 100);
-        tfiToken.burnFrom(alice, 100);
-
-        assertEq(tfiToken.balanceOf(alice), 900, "Tokens should be burned");
-        vm.stopPrank();
-    }
 }
