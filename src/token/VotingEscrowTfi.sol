@@ -346,7 +346,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         uint256 oldEnd = lockup.end;
         uint256 oldPoints = lockup.points;
 
-        uint256 newAmount = oldAmount += amount;
+        uint256 newAmount = oldAmount + amount;
         if (newAmount > type(uint128).max) {
             revert Errors.InvalidAmount();
         }
