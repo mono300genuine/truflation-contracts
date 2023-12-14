@@ -20,6 +20,7 @@ library Errors {
     error InvalidVestingCategory(uint256 id);
     error InvalidVestingInfo(uint256 categoryIdx, uint256 id);
     error InvalidUserVesting();
+    error ClaimAmountExceed();
     error UserVestingAlreadySet(uint256 categoryIdx, uint256 vestingId, address user);
     error UserVestingDoesNotExists(uint256 categoryIdx, uint256 vestingId, address user);
     error MaxAllocationExceed();

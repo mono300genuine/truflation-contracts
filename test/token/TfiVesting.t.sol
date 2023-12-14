@@ -421,7 +421,7 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(alice);
-        vesting.claim(categoryId, vestingId);
+        vesting.claim(categoryId, vestingId, claimed);
 
         assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be zero");
 
@@ -514,27 +514,26 @@ contract TfiVestingTest is Test {
 
         vm.warp(block.timestamp + 50 days);
 
-        uint256 claimed = vesting.claimable(categoryId, vestingId, alice);
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        uint256 claimAmount = claimable - 10;
         assertNotEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be non-zero");
 
         vm.startPrank(alice);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit Claimed(categoryId, vestingId, alice, claimed);
+        emit Claimed(categoryId, vestingId, alice, claimAmount);
 
-        vesting.claim(categoryId, vestingId);
+        vesting.claim(categoryId, vestingId, claimAmount);
 
-        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be zero");
-        assertEq(tfiToken.balanceOf(alice), claimed, "Claimed amount is incorrect");
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 10, "Claimable amount is invalid");
+        assertEq(tfiToken.balanceOf(alice), claimAmount, "Claimed amount is incorrect");
 
-        _validateUserVesting(categoryId, vestingId, alice, amount, claimed, 0, startTime);
+        _validateUserVesting(categoryId, vestingId, alice, amount, claimAmount, 0, startTime);
 
         vm.stopPrank();
     }
 
     function testClaimFailure() external {
-        console.log("Should revert to claim when there is no claimable amount");
-
         _setupVestingPlan();
         _setupExampleUserVestings();
 
@@ -545,9 +544,15 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(alice);
 
+        console.log("Should revert to claim when there is no claimable amount");
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
 
-        vesting.claim(categoryId, vestingId);
+        vesting.claim(categoryId, vestingId, 0);
+
+        console.log("Should revert to claim when claim amount exceed claimable amount");
+        vm.expectRevert(abi.encodeWithSignature("ClaimAmountExceed()"));
+
+        vesting.claim(categoryId, vestingId, 1);
 
         vm.stopPrank();
     }
@@ -641,7 +646,9 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(alice);
 
-        uint256 claimed = vesting.claim(categoryId, vestingId);
+        uint256 claimed = vesting.claimable(categoryId, vestingId, alice);
+
+        vesting.claim(categoryId, vestingId, claimed);
 
         (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
 
@@ -730,7 +737,8 @@ contract TfiVestingTest is Test {
 
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
-        uint256 claimed = vesting.claim(categoryId, vestingId);
+        uint256 claimed = vesting.claimable(categoryId, vestingId, alice);
+        vesting.claim(categoryId, vestingId, claimed);
 
         (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
 
@@ -811,7 +819,8 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(alice);
 
-        vesting.claim(categoryId, vestingId);
+        uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
+        vesting.claim(categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -858,7 +867,8 @@ contract TfiVestingTest is Test {
         vm.startPrank(alice);
 
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
-        vesting.claim(categoryId, vestingId);
+        uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
+        vesting.claim(categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -959,7 +969,8 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(alice);
 
-        vesting.claim(categoryId, vestingId);
+        uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
+        vesting.claim(categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -1003,7 +1014,8 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(alice);
 
-        vesting.claim(categoryId, vestingId);
+        uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
+        vesting.claim(categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -1052,7 +1064,8 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(alice);
 
-        vesting.claim(categoryId, vestingId);
+        uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
+        vesting.claim(categoryId, vestingId, claimAmount);
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);

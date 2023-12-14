@@ -169,18 +169,21 @@ contract TfiVesting is Ownable {
      * @notice Claim available amount
      * @param categoryId category id
      * @param vestingId vesting id
-     * @return claimableAmount Claimable amount
+     * @param claimAmount token amount to claim
      */
-    function claim(uint256 categoryId, uint256 vestingId) public returns (uint256 claimableAmount) {
-        claimableAmount = claimable(categoryId, vestingId, msg.sender);
-        if (claimableAmount == 0) {
+    function claim(uint256 categoryId, uint256 vestingId, uint256 claimAmount) public {
+        if (claimAmount == 0) {
             revert Errors.ZeroAmount();
         }
+        uint256 claimableAmount = claimable(categoryId, vestingId, msg.sender);
+        if (claimAmount > claimableAmount) {
+            revert Errors.ClaimAmountExceed();
+        }
 
-        userVestings[categoryId][vestingId][msg.sender].claimed += claimableAmount;
-        tfiToken.safeTransfer(msg.sender, claimableAmount);
+        userVestings[categoryId][vestingId][msg.sender].claimed += claimAmount;
+        tfiToken.safeTransfer(msg.sender, claimAmount);
 
-        emit Claimed(categoryId, vestingId, msg.sender, claimableAmount);
+        emit Claimed(categoryId, vestingId, msg.sender, claimAmount);
     }
 
     /**
