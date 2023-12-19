@@ -27,8 +27,7 @@ contract DeployTokenAndVesting is Script {
         vesting = new TfiVesting(tfiToken);
 
         tfiStakingRewards = new VirtualStakingRewards(vm.addr(privateKey), address(tfiToken));
-        veTFI =
-        new VotingEscrowTfi(address(tfiToken), address(vesting), block.timestamp, 1 hours, address(tfiStakingRewards));
+        veTFI = new VotingEscrowTfi(address(tfiToken), address(vesting), 1 hours, address(tfiStakingRewards));
         tfiStakingRewards.setOperator(address(veTFI));
         vesting.setVeTfi(address(veTFI));
 

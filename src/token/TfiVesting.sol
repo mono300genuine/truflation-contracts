@@ -58,7 +58,7 @@ contract TfiVesting is Ownable {
 
     /// @dev Emitted when user increased veTFI staking period or amount
     event IncreasedStaking(
-        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
     );
 
     /// @dev Emitted when user unstakes from veTFI
@@ -220,27 +220,17 @@ contract TfiVesting is Ownable {
      * @notice Increase veTFI staking amount and period
      * @param categoryId category id
      * @param vestingId vesting id
-     * @param amount amount to increase
      * @param duration lock period from now
      */
-    function increaseStaking(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
+    function increaseStaking(uint256 categoryId, uint256 vestingId, uint256 duration) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
             revert Errors.LockDoesNotExist();
         }
 
-        UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
+        veTFI.increaseVestingLock(msg.sender, lockupId - 1, duration);
 
-        if (amount > userVesting.amount - userVesting.claimed - userVesting.locked) {
-            revert Errors.InvalidAmount();
-        }
-
-        userVesting.locked += amount;
-
-        tfiToken.safeIncreaseAllowance(address(veTFI), amount);
-        veTFI.increaseVestingLock(msg.sender, lockupId - 1, amount, duration);
-
-        emit IncreasedStaking(categoryId, vestingId, msg.sender, amount, duration);
+        emit IncreasedStaking(categoryId, vestingId, msg.sender, duration);
     }
 
     /**

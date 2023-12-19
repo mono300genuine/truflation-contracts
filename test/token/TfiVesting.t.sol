@@ -32,7 +32,7 @@ contract TfiVestingTest is Test {
         uint256 lockupId
     );
     event IncreasedStaking(
-        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
     );
     event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
@@ -64,8 +64,7 @@ contract TfiVestingTest is Test {
         tfiToken = new TruflationToken();
         vesting = new TfiVesting(tfiToken);
         tfiStakingRewards = new VirtualStakingRewards(owner, address(tfiToken));
-        veTFI =
-        new VotingEscrowTfi(address(tfiToken), address(vesting), block.timestamp, 1 hours, address(tfiStakingRewards));
+        veTFI = new VotingEscrowTfi(address(tfiToken), address(vesting), 1 hours, address(tfiStakingRewards));
         tfiStakingRewards.setOperator(address(veTFI));
         vesting.setVeTfi(address(veTFI));
 
@@ -582,7 +581,7 @@ contract TfiVestingTest is Test {
         assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount, "Staked amount is invalid");
         assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore - stakeAmount, "Remaining balance is invalid");
 
-        (uint128 lockupAmount,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
 
         assertEq(lockupAmount, stakeAmount, "Lockup amount is invalid");
         assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
@@ -668,7 +667,6 @@ contract TfiVestingTest is Test {
         uint256 categoryId = 0;
         uint256 vestingId = 0;
         uint256 stakeAmount = 10e18;
-        uint256 increaseAmount = 20e18;
         uint256 duration = 30 days;
         uint256 increaseDuration = 50 days;
 
@@ -681,23 +679,19 @@ contract TfiVestingTest is Test {
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit IncreasedStaking(categoryId, vestingId, alice, increaseAmount, increaseDuration);
+        emit IncreasedStaking(categoryId, vestingId, alice, increaseDuration);
 
-        vesting.increaseStaking(categoryId, vestingId, increaseAmount, increaseDuration);
+        vesting.increaseStaking(categoryId, vestingId, increaseDuration);
 
-        assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount + increaseAmount, "Staked amount is invalid");
-        assertEq(
-            tfiToken.balanceOf(address(vesting)),
-            tfiBalanceBefore - stakeAmount - increaseAmount,
-            "Remaining balance is invalid"
-        );
+        assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount, "Staked amount is invalid");
+        assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore - stakeAmount, "Remaining balance is invalid");
 
-        (uint128 lockupAmount,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
 
-        assertEq(lockupAmount, stakeAmount + increaseAmount, "Lockup amount is invalid");
+        assertEq(lockupAmount, stakeAmount, "Lockup amount is invalid");
         assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
 
-        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount + increaseAmount, startTime);
+        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount, startTime);
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
 
         vm.stopPrank();
@@ -715,36 +709,7 @@ contract TfiVestingTest is Test {
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("LockDoesNotExist()"));
-        vesting.increaseStaking(categoryId, vestingId, 100, 30 days);
-
-        vm.stopPrank();
-    }
-
-    function testIncreaseStaking_Revert_WhenAmountIsGreaterThanRemaining() external {
-        console.log("Revert to increase staking when amount is greater than remaining vesting amount");
-
-        _setupVestingPlan();
-        _setupExampleUserVestings();
-
-        uint256 categoryId = 0;
-        uint256 vestingId = 0;
-        uint256 stakeAmount = 10e18;
-        uint256 duration = 30 days;
-
-        vm.warp(block.timestamp + 50 days);
-
-        vm.startPrank(alice);
-
-        vesting.stake(categoryId, vestingId, stakeAmount, duration);
-
-        uint256 claimed = vesting.claimable(categoryId, vestingId, alice);
-        vesting.claim(categoryId, vestingId, claimed);
-
-        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
-
-        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
-
-        vesting.increaseStaking(categoryId, vestingId, amount - stakeAmount - claimed + 1, duration);
+        vesting.increaseStaking(categoryId, vestingId, 30 days);
 
         vm.stopPrank();
     }
@@ -778,7 +743,7 @@ contract TfiVestingTest is Test {
         assertEq(tfiToken.balanceOf(address(veTFI)), 0, "Staked amount is invalid");
         assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore + stakeAmount, "Remaining balance is invalid");
 
-        (uint128 lockupAmount,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
 
         assertEq(lockupAmount, 0, "Lockup should was not deleted");
         assertEq(lockupIsVesting, false, "Lockup should was not deleted");

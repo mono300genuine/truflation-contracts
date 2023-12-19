@@ -5,6 +5,7 @@ interface IVotingEscrow {
     /// @dev Lockup struct
     struct Lockup {
         uint128 amount; // Locked amount
+        uint128 duration; // Lock duration in seconds
         uint128 end; // Lock end timestamp in seconds
         uint256 points; // veTFI points
         bool isVesting; // True if locked from vesting
@@ -18,7 +19,7 @@ interface IVotingEscrow {
         external
         returns (uint256 newLockupId);
 
-    function increaseVestingLock(address user, uint256 lockupId, uint256 amount, uint256 duration) external;
+    function increaseVestingLock(address user, uint256 lockupId, uint256 duration) external;
 
     // Events
     /// Emitted when user staked TFI or vesting

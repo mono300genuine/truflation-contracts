@@ -38,7 +38,6 @@ library Errors {
     error NoAccess();
     error LockupAlreadyUnstaked();
     error LockupNotEnded();
-    error NewDurationMustBeLonger();
     error NotIncrease();
     error NotMigrate();
     error TooShort();
