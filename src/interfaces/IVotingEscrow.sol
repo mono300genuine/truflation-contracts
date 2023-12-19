@@ -19,7 +19,7 @@ interface IVotingEscrow {
         external
         returns (uint256 newLockupId);
 
-    function increaseVestingLock(address user, uint256 lockupId, uint256 duration) external;
+    function extendVestingLock(address user, uint256 lockupId, uint256 duration) external;
 
     // Events
     /// Emitted when user staked TFI or vesting

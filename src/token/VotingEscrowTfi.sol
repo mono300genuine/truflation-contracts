@@ -181,22 +181,22 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Increase lock amount or duration
+     * @notice Extend lock duration
      *
      * @param lockupId the id of the old lockup to extend
      * @param duration number of seconds from now to stake for
      */
-    function increaseLock(uint256 lockupId, uint256 duration) external {
-        _increaseLock(msg.sender, lockupId, duration, false);
+    function extendLock(uint256 lockupId, uint256 duration) external {
+        _extendLock(msg.sender, lockupId, duration, false);
     }
 
     /**
-     * @notice Increase lock amount or duration for vesting
+     * @notice Extend lock duration for vesting
      *
      * @param duration number of seconds from now to stake for
      */
-    function increaseVestingLock(address user, uint256 lockupId, uint256 duration) external onlyVesting {
-        _increaseLock(user, lockupId, duration, true);
+    function extendVestingLock(address user, uint256 lockupId, uint256 duration) external onlyVesting {
+        _extendLock(user, lockupId, duration, true);
     }
 
     /**
@@ -299,7 +299,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Increase lock amount or duration
+     * @notice Extend lock duration
      *
      * The stake end time is computed from the current time + duration, just
      * like it is for new stakes. So a new stake for seven days duration and
@@ -315,7 +315,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
      * @param duration number of seconds from now to stake for
      * @param isVesting true if called from vesting
      */
-    function _increaseLock(address user, uint256 lockupId, uint256 duration, bool isVesting) internal {
+    function _extendLock(address user, uint256 lockupId, uint256 duration, bool isVesting) internal {
         // duration checked inside previewPoints
         Lockup memory lockup = lockups[user][lockupId];
         if (lockup.isVesting != isVesting) {

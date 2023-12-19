@@ -31,7 +31,7 @@ contract TfiVestingTest is Test {
         uint256 duration,
         uint256 lockupId
     );
-    event IncreasedStaking(
+    event ExtendedStaking(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
     );
     event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
@@ -658,8 +658,8 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
-    function testIncreaseStaking() external {
-        console.log("Increase staking amount and duration");
+    function testExtendStaking() external {
+        console.log("Extend staking duration");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -668,7 +668,7 @@ contract TfiVestingTest is Test {
         uint256 vestingId = 0;
         uint256 stakeAmount = 10e18;
         uint256 duration = 30 days;
-        uint256 increaseDuration = 50 days;
+        uint256 extendDuration = 50 days;
 
         (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
 
@@ -679,9 +679,9 @@ contract TfiVestingTest is Test {
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit IncreasedStaking(categoryId, vestingId, alice, increaseDuration);
+        emit ExtendedStaking(categoryId, vestingId, alice, extendDuration);
 
-        vesting.increaseStaking(categoryId, vestingId, increaseDuration);
+        vesting.extendStaking(categoryId, vestingId, extendDuration);
 
         assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount, "Staked amount is invalid");
         assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore - stakeAmount, "Remaining balance is invalid");
@@ -697,8 +697,8 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
-    function testIncreaseStaking_Revert_WhenLockDoesNotExists() external {
-        console.log("Revert to increase staking when lock does not exist");
+    function testExtendStaking_Revert_WhenLockDoesNotExists() external {
+        console.log("Revert to extend staking when lock does not exist");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -709,7 +709,7 @@ contract TfiVestingTest is Test {
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("LockDoesNotExist()"));
-        vesting.increaseStaking(categoryId, vestingId, 30 days);
+        vesting.extendStaking(categoryId, vestingId, 30 days);
 
         vm.stopPrank();
     }

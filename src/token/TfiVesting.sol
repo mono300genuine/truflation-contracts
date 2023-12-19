@@ -56,8 +56,8 @@ contract TfiVesting is Ownable {
         uint256 lockupId
     );
 
-    /// @dev Emitted when user increased veTFI staking period or amount
-    event IncreasedStaking(
+    /// @dev Emitted when user extended veTFI staking period
+    event ExtendedStaking(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
     );
 
@@ -217,20 +217,20 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * @notice Increase veTFI staking amount and period
+     * @notice Extend veTFI staking period
      * @param categoryId category id
      * @param vestingId vesting id
      * @param duration lock period from now
      */
-    function increaseStaking(uint256 categoryId, uint256 vestingId, uint256 duration) external {
+    function extendStaking(uint256 categoryId, uint256 vestingId, uint256 duration) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
             revert Errors.LockDoesNotExist();
         }
 
-        veTFI.increaseVestingLock(msg.sender, lockupId - 1, duration);
+        veTFI.extendVestingLock(msg.sender, lockupId - 1, duration);
 
-        emit IncreasedStaking(categoryId, vestingId, msg.sender, duration);
+        emit ExtendedStaking(categoryId, vestingId, msg.sender, duration);
     }
 
     /**

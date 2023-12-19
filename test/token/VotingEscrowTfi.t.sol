@@ -381,8 +381,8 @@ contract VotingEscrowTfiTest is Test {
         vm.stopPrank();
     }
 
-    function testIncreaseLock() external {
-        console.log("Increase duration of lockup");
+    function testExtendLock() external {
+        console.log("Extend duration of lockup");
 
         uint256 amount = 100e18;
         uint256 duration = 30 days;
@@ -391,13 +391,13 @@ contract VotingEscrowTfiTest is Test {
 
         vm.warp(block.timestamp + 10 days);
 
-        uint256 increaseDuration = 60 days;
+        uint256 extendDuration = 60 days;
 
         (,, uint128 _ends,,) = veTFI.lockups(alice, 0);
 
-        uint256 newEnds = _ends + increaseDuration;
+        uint256 newEnds = _ends + extendDuration;
 
-        (uint256 newPoints,) = veTFI.previewPoints(amount, duration + increaseDuration);
+        (uint256 newPoints,) = veTFI.previewPoints(amount, duration + extendDuration);
         assertNotEq(newPoints, 0, "Points should be non-zero");
 
         vm.startPrank(alice);
@@ -405,18 +405,17 @@ contract VotingEscrowTfiTest is Test {
         vm.expectEmit(true, true, true, true, address(veTFI));
         emit Stake(alice, false, 0, amount, newEnds, newPoints);
 
-        veTFI.increaseLock(0, increaseDuration);
+        veTFI.extendLock(0, extendDuration);
 
         vm.stopPrank();
 
         assertEq(veTFI.balanceOf(alice), newPoints, "Mint increased points to alice");
         assertEq(tfiStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
-        assertEq(tfiToken.balanceOf(address(veTFI)), amount, "Increased amount should be sent to veTFI");
 
-        _validateLockup(alice, 0, amount, duration + increaseDuration, newEnds, newPoints, false);
+        _validateLockup(alice, 0, amount, duration + extendDuration, newEnds, newPoints, false);
     }
 
-    function testIncreaseLockFailures() external {
+    function testExtendLockFailures() external {
         uint256 amount = 100e18;
         uint256 duration = 30 days;
 
@@ -425,22 +424,22 @@ contract VotingEscrowTfiTest is Test {
         (uint256 points,) = veTFI.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
-        uint256 increaseDuration = 60 days;
+        uint256 extendDuration = 60 days;
 
-        console.log("Revert to increase if trying to increase as vesting");
+        console.log("Revert to extend if trying to extend as vesting");
 
         vm.warp(block.timestamp + 10 days);
 
         vm.startPrank(vesting);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTFI.increaseVestingLock(alice, 0, increaseDuration);
+        veTFI.extendVestingLock(alice, 0, extendDuration);
 
         vm.stopPrank();
     }
 
-    function testIncreaseVestingLock() external {
-        console.log("Increase duration of vesting lockup");
+    function testExtendVestingLock() external {
+        console.log("Extend duration of vesting lockup");
 
         uint256 amount = 100e18;
         uint256 duration = 30 days;
@@ -451,10 +450,10 @@ contract VotingEscrowTfiTest is Test {
 
         vm.warp(block.timestamp + 10 days);
 
-        uint256 increaseDuration = 60 days;
+        uint256 extendDuration = 60 days;
 
-        uint256 newEnds = _ends + increaseDuration;
-        uint256 newDuration = duration + increaseDuration;
+        uint256 newEnds = _ends + extendDuration;
+        uint256 newDuration = duration + extendDuration;
 
         (uint256 newPoints,) = veTFI.previewPoints(amount, newDuration);
         assertNotEq(newPoints, 0, "Points should be non-zero");
@@ -464,34 +463,34 @@ contract VotingEscrowTfiTest is Test {
         vm.expectEmit(true, true, true, true, address(veTFI));
         emit Stake(alice, true, 0, amount, newEnds, newPoints);
 
-        veTFI.increaseVestingLock(alice, 0, increaseDuration);
+        veTFI.extendVestingLock(alice, 0, extendDuration);
 
         vm.stopPrank();
 
         assertEq(veTFI.balanceOf(alice), newPoints, "Mint increased points to alice");
         assertEq(tfiStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
 
-        _validateLockup(alice, 0, amount, duration + increaseDuration, newEnds, newPoints, true);
+        _validateLockup(alice, 0, amount, duration + extendDuration, newEnds, newPoints, true);
     }
 
-    function testIncreaseVestingLockFailures() external {
+    function testExtendVestingLockFailures() external {
         uint256 amount = 100e18;
         uint256 duration = 30 days;
 
         _stakeVesting(amount, duration, alice);
 
-        console.log("Revert to increase if trying to increase as normal");
+        console.log("Revert to extend if trying to extend as normal");
 
         vm.warp(block.timestamp + 10 days);
 
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTFI.increaseLock(0, duration);
+        veTFI.extendLock(0, duration);
 
         console.log("Revert if msg.sender is not vesting");
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-        veTFI.increaseVestingLock(alice, 0, duration);
+        veTFI.extendVestingLock(alice, 0, duration);
 
         vm.stopPrank();
     }
