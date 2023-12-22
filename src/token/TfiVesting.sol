@@ -16,9 +16,6 @@ import {Errors} from "../libraries/Errors.sol";
 contract TfiVesting is Ownable {
     using SafeERC20 for IERC20;
 
-    /// @dev Emitted when TGE time set
-    event TgeTimeSet(uint64 tgeTime);
-
     /// @dev Emitted when vesting category is set
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation);
 
@@ -97,7 +94,7 @@ contract TfiVesting is Ownable {
     IVotingEscrow public veTFI;
 
     /// @dev TGE timestamp
-    uint64 public tgeTime;
+    uint64 public immutable tgeTime;
 
     /// @dev Vesting categories
     VestingCategory[] public categories;
@@ -115,10 +112,15 @@ contract TfiVesting is Ownable {
      * @notice TFI Vesting constructor
      * @param _tfiToken TFI token address
      */
-    constructor(IERC20 _tfiToken) {
+    constructor(IERC20 _tfiToken, uint64 _tgeTime) {
         if (address(_tfiToken) == address(0)) revert Errors.ZeroAddress();
 
         tfiToken = _tfiToken;
+
+        if (_tgeTime < block.timestamp) {
+            revert Errors.InvalidTimestamp();
+        }
+        tgeTime = _tgeTime;
     }
 
     /**
@@ -341,25 +343,6 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * @notice Set TGE timestamp
-     * @dev Only admin can set tge time
-     * @param _tgeTime new TGE timestamp in seconds
-     */
-    function setTgeTime(uint64 _tgeTime) external onlyOwner {
-        if (tgeTime != 0 && tgeTime < block.timestamp) {
-            revert Errors.VestingStarted(tgeTime);
-        }
-
-        if (_tgeTime < block.timestamp) {
-            revert Errors.InvalidTimestamp();
-        }
-
-        tgeTime = _tgeTime;
-
-        emit TgeTimeSet(_tgeTime);
-    }
-
-    /**
      * @notice Add or modify vesting category
      * @dev Only admin can set vesting category
      * @param id id to modify or uint256.max to add new category
@@ -440,12 +423,10 @@ contract TfiVesting is Ownable {
         if (amount < userVesting.claimed + userVesting.locked) {
             revert Errors.InvalidUserVesting();
         }
+        if (startTime != 0 && startTime < tgeTime) revert Errors.InvalidTimestamp();
+
         userVesting.amount = amount;
         userVesting.startTime = startTime == 0 ? tgeTime : startTime;
-
-        if (userVesting.startTime == 0) {
-            revert Errors.InvalidTimestamp();
-        }
 
         emit UserVestingSet(categoryId, vestingId, user, amount, userVesting.startTime);
     }

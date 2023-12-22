@@ -24,7 +24,8 @@ contract DeployTokenAndVesting is Script {
 
         tfiToken = new TruflationToken();
 
-        vesting = new TfiVesting(tfiToken);
+        uint64 tgeTime = 1702997500;
+        vesting = new TfiVesting(tfiToken, tgeTime);
 
         tfiStakingRewards = new VirtualStakingRewards(vm.addr(privateKey), address(tfiToken));
         veTFI = new VotingEscrowTfi(address(tfiToken), address(vesting), 1 hours, address(tfiStakingRewards));
