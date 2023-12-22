@@ -83,6 +83,7 @@ contract TfiVesting is Ownable {
         uint256 maxAllocation; // Maximum allocation for this category
         uint256 allocated; // Current allocated amount
         bool adminClaimable; // Allow admin to claim if value is true
+        uint256 totalClaimed; // Total claimed amount
     }
 
     /// @dev Vesting info struct
@@ -206,6 +207,7 @@ contract TfiVesting is Ownable {
             revert ClaimAmountExceed();
         }
 
+        categories[categoryId].totalClaimed += claimAmount;
         userVestings[categoryId][vestingId][user].claimed += claimAmount;
         tfiToken.safeTransfer(user, claimAmount);
 
@@ -348,11 +350,14 @@ contract TfiVesting is Ownable {
             userVesting.locked = 0;
         }
 
+        VestingCategory storage category = categories[categoryId];
+
         uint256 claimableAmount = claimable(categoryId, vestingId, user);
         if (giveUnclaimed && claimableAmount != 0) {
             tfiToken.safeTransfer(user, claimableAmount);
 
             userVesting.claimed += claimableAmount;
+            category.totalClaimed += claimableAmount;
             emit Claimed(categoryId, vestingId, user, claimableAmount);
         }
 
@@ -360,7 +365,6 @@ contract TfiVesting is Ownable {
 
         delete userVestings[categoryId][vestingId][user];
 
-        VestingCategory storage category = categories[categoryId];
         category.allocated -= unvested;
 
         emit CancelVesting(categoryId, vestingId, user, giveUnclaimed);
@@ -385,7 +389,7 @@ contract TfiVesting is Ownable {
         int256 tokenMove;
         if (id == type(uint256).max) {
             id = categories.length;
-            categories.push(VestingCategory(category, maxAllocation, 0, adminClaimable));
+            categories.push(VestingCategory(category, maxAllocation, 0, adminClaimable, 0));
             tokenMove = int256(maxAllocation);
         } else {
             if (categories[id].allocated > maxAllocation) {
@@ -394,6 +398,7 @@ contract TfiVesting is Ownable {
             tokenMove = int256(maxAllocation) - int256(categories[id].maxAllocation);
             categories[id].maxAllocation = maxAllocation;
             categories[id].category = category;
+            categories[id].adminClaimable = adminClaimable;
         }
 
         if (tokenMove > 0) {
