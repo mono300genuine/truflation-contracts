@@ -9,7 +9,7 @@ import "../../src/token/VotingEscrowTfi.sol";
 import "../../src/staking/VirtualStakingRewards.sol";
 
 contract TfiVestingTest is Test {
-    event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation);
+    event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation, bool adminClaimable);
     event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, TfiVesting.VestingInfo info);
     event UserVestingSet(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint64 startTime
@@ -90,16 +90,17 @@ contract TfiVestingTest is Test {
         console.log("Add first category");
         string memory category = "Preseed";
         uint256 maxAllocation = 1e20;
+        bool adminClaimable = true;
 
         vm.startPrank(owner);
         tfiToken.approve(address(vesting), type(uint256).max);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingCategorySet(0, category, maxAllocation);
+        emit VestingCategorySet(0, category, maxAllocation, adminClaimable);
 
-        vesting.setVestingCategory(type(uint256).max, category, maxAllocation);
+        vesting.setVestingCategory(type(uint256).max, category, maxAllocation, adminClaimable);
 
-        _validateCategory(0, category, maxAllocation, 0);
+        _validateCategory(0, category, maxAllocation, 0, adminClaimable);
         assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation, "Balance is invalid");
 
         vm.stopPrank();
@@ -109,16 +110,17 @@ contract TfiVestingTest is Test {
         console.log("Add another category");
         string memory category = "Seed";
         uint256 maxAllocation = 1e15;
+        bool adminClaimable = false;
 
         vm.startPrank(owner);
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingCategorySet(1, category, maxAllocation);
-        vesting.setVestingCategory(type(uint256).max, category, maxAllocation);
+        emit VestingCategorySet(1, category, maxAllocation, adminClaimable);
+        vesting.setVestingCategory(type(uint256).max, category, maxAllocation, adminClaimable);
 
-        _validateCategory(1, category, maxAllocation, 0);
+        _validateCategory(1, category, maxAllocation, 0, adminClaimable);
         assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
 
         vm.stopPrank();
@@ -127,17 +129,18 @@ contract TfiVestingTest is Test {
     function testSetVestingCategory_IncreaseMaxAllocation_WhenNoAllocated() external {
         console.log("Increase max allocation when nothing allocated");
         uint256 maxAllocation = 15e14;
+        bool adminClaimable = false;
 
         vm.startPrank(owner);
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
-        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingCategorySet(1, "Private", maxAllocation);
-        vesting.setVestingCategory(1, "Private", maxAllocation);
+        emit VestingCategorySet(1, "Private", maxAllocation, adminClaimable);
+        vesting.setVestingCategory(1, "Private", maxAllocation, adminClaimable);
 
-        _validateCategory(1, "Private", maxAllocation, 0);
+        _validateCategory(1, "Private", maxAllocation, 0, adminClaimable);
         assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
 
         vm.stopPrank();
@@ -147,23 +150,24 @@ contract TfiVestingTest is Test {
         console.log("Increase max allocation when some allocated");
         uint256 maxAllocation = 15e14;
         uint256 allocated = 1e14;
+        bool adminClaimable = false;
 
         vm.startPrank(owner);
 
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
-        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
         vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
-        _validateCategory(1, "Seed", 1e15, allocated);
+        _validateCategory(1, "Seed", 1e15, allocated, false);
 
         uint256 ownerTfiBalance = tfiToken.balanceOf(owner);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingCategorySet(1, "Private", maxAllocation);
-        vesting.setVestingCategory(1, "Private", maxAllocation);
+        emit VestingCategorySet(1, "Private", maxAllocation, adminClaimable);
+        vesting.setVestingCategory(1, "Private", maxAllocation, adminClaimable);
 
-        _validateCategory(1, "Private", maxAllocation, allocated);
+        _validateCategory(1, "Private", maxAllocation, allocated, adminClaimable);
         assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
         assertEq(tfiToken.balanceOf(owner), ownerTfiBalance - (maxAllocation - 1e15), "Balance is invalid");
 
@@ -174,23 +178,24 @@ contract TfiVestingTest is Test {
         console.log("Decrease max allocation");
         uint256 maxAllocation = 2e14;
         uint256 allocated = 1e14;
+        bool adminClaimable = false;
 
         vm.startPrank(owner);
 
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
-        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
         vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
-        _validateCategory(1, "Seed", 1e15, allocated);
+        _validateCategory(1, "Seed", 1e15, allocated, false);
 
         uint256 ownerTfiBalance = tfiToken.balanceOf(owner);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingCategorySet(1, "Private", maxAllocation);
-        vesting.setVestingCategory(1, "Private", maxAllocation);
+        emit VestingCategorySet(1, "Private", maxAllocation, adminClaimable);
+        vesting.setVestingCategory(1, "Private", maxAllocation, adminClaimable);
 
-        _validateCategory(1, "Private", maxAllocation, allocated);
+        _validateCategory(1, "Private", maxAllocation, allocated, adminClaimable);
         assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
         assertEq(tfiToken.balanceOf(owner), ownerTfiBalance + (1e15 - maxAllocation), "Balance is invalid");
 
@@ -205,14 +210,14 @@ contract TfiVestingTest is Test {
         vm.startPrank(owner);
 
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
-        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+        vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
         vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
-        _validateCategory(1, "Seed", 1e15, allocated);
+        _validateCategory(1, "Seed", 1e15, allocated, false);
 
         vm.expectRevert(abi.encodeWithSignature("MaxAllocationExceed()"));
-        vesting.setVestingCategory(1, "Private", maxAllocation);
+        vesting.setVestingCategory(1, "Private", maxAllocation, false);
 
         vm.stopPrank();
     }
@@ -222,7 +227,7 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
 
         vm.stopPrank();
     }
@@ -238,7 +243,7 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit VestingInfoSet(0, 0, TfiVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
@@ -261,7 +266,7 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingInfo(0, type(uint256).max, TfiVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
 
         vm.expectEmit(true, true, true, true, address(vesting));
@@ -279,7 +284,7 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vm.stopPrank();
 
         vm.startPrank(alice);
@@ -304,7 +309,7 @@ contract TfiVestingTest is Test {
         vesting.setUserVesting(1, 0, alice, 0, amount);
 
         _validateUserVesting(1, 0, alice, amount, 0, 0, tgeTime);
-        (,, uint256 allocated) = vesting.categories(1);
+        (,, uint256 allocated,) = vesting.categories(1);
         assertEq(allocated, amount, "Allocated amount is invalid");
 
         vm.stopPrank();
@@ -349,11 +354,10 @@ contract TfiVestingTest is Test {
         _setupVestingPlan();
 
         uint256 amount = 100e18;
-        uint64 tgeTime = vesting.tgeTime();
         uint256 categoryId = 0;
         uint256 vestingId = 0;
 
-        (, uint256 maxAllocation,) = vesting.categories(categoryId);
+        (, uint256 maxAllocation,,) = vesting.categories(categoryId);
 
         vm.startPrank(owner);
         vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
@@ -385,7 +389,7 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(alice);
-        vesting.claim(categoryId, vestingId, claimed);
+        vesting.claim(alice, categoryId, vestingId, claimed);
 
         assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be zero");
 
@@ -447,21 +451,23 @@ contract TfiVestingTest is Test {
         tfiToken.approve(address(vesting), type(uint256).max);
 
         bytes[] memory payloads = new bytes[](2);
-        payloads[0] =
-            abi.encodeWithSignature("setVestingCategory(uint256,string,uint256)", type(uint256).max, "Preseed", 1e20);
-        payloads[1] =
-            abi.encodeWithSignature("setVestingCategory(uint256,string,uint256)", type(uint256).max, "Seed", 2e20);
+        payloads[0] = abi.encodeWithSignature(
+            "setVestingCategory(uint256,string,uint256,bool)", type(uint256).max, "Preseed", 1e20, false
+        );
+        payloads[1] = abi.encodeWithSignature(
+            "setVestingCategory(uint256,string,uint256,bool)", type(uint256).max, "Seed", 2e20, true
+        );
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingCategorySet(0, "Preseed", 1e20);
+        emit VestingCategorySet(0, "Preseed", 1e20, false);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingCategorySet(1, "Seed", 2e20);
+        emit VestingCategorySet(1, "Seed", 2e20, true);
 
         vesting.multicall(payloads);
 
-        _validateCategory(0, "Preseed", 1e20, 0);
-        _validateCategory(1, "Seed", 2e20, 0);
+        _validateCategory(0, "Preseed", 1e20, 0, false);
+        _validateCategory(1, "Seed", 2e20, 0, true);
         assertEq(tfiToken.balanceOf(address(vesting)), 3e20, "Balance is invalid");
 
         vm.stopPrank();
@@ -489,12 +495,44 @@ contract TfiVestingTest is Test {
         vm.expectEmit(true, true, true, true, address(vesting));
         emit Claimed(categoryId, vestingId, alice, claimAmount);
 
-        vesting.claim(categoryId, vestingId, claimAmount);
+        vesting.claim(alice, categoryId, vestingId, claimAmount);
 
         assertEq(vesting.claimable(categoryId, vestingId, alice), 10, "Claimable amount is invalid");
         assertEq(tfiToken.balanceOf(alice), claimAmount, "Claimed amount is incorrect");
 
         _validateUserVesting(categoryId, vestingId, alice, amount, claimAmount, 0, startTime);
+
+        vm.stopPrank();
+    }
+
+    function testClaim_By_Admin() external {
+        console.log("Claim available amount by admin");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 3;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, carol);
+
+        vm.warp(block.timestamp + 50 days);
+
+        uint256 claimable = vesting.claimable(categoryId, vestingId, carol);
+        uint256 claimAmount = claimable - 10;
+        assertNotEq(vesting.claimable(categoryId, vestingId, carol), 0, "Claimable amount should be non-zero");
+
+        vm.startPrank(owner);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit Claimed(categoryId, vestingId, carol, claimAmount);
+
+        vesting.claim(carol, categoryId, vestingId, claimAmount);
+
+        assertEq(vesting.claimable(categoryId, vestingId, carol), 10, "Claimable amount is invalid");
+        assertEq(tfiToken.balanceOf(carol), claimAmount, "Claimed amount is incorrect");
+
+        _validateUserVesting(categoryId, vestingId, carol, amount, claimAmount, 0, startTime);
 
         vm.stopPrank();
     }
@@ -513,12 +551,34 @@ contract TfiVestingTest is Test {
         console.log("Should revert to claim when there is no claimable amount");
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
 
-        vesting.claim(categoryId, vestingId, 0);
+        vesting.claim(alice, categoryId, vestingId, 0);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        console.log("Should revert to claim if msg.sender is not user for non-admin-claimable");
+        (,,, bool _adminClaimable) = vesting.categories(categoryId);
+        assertEq(_adminClaimable, false, "Not non-admin claimable");
+
+        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", bob));
+
+        vesting.claim(alice, categoryId, vestingId, 1);
+
+        console.log("Should revert to claim if msg.sender is not user or owner for admin-claimable");
+        (,,, _adminClaimable) = vesting.categories(3);
+        assertEq(_adminClaimable, true, "Not admin claimable");
+
+        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", bob));
+
+        vesting.claim(carol, 3, vestingId, 1);
+
+        vm.stopPrank();
+
+        vm.startPrank(alice);
 
         console.log("Should revert to claim when claim amount exceed claimable amount");
         vm.expectRevert(abi.encodeWithSignature("ClaimAmountExceed()"));
 
-        vesting.claim(categoryId, vestingId, 1);
+        vesting.claim(alice, categoryId, vestingId, 1);
 
         vm.stopPrank();
     }
@@ -614,7 +674,7 @@ contract TfiVestingTest is Test {
 
         uint256 claimed = vesting.claimable(categoryId, vestingId, alice);
 
-        vesting.claim(categoryId, vestingId, claimed);
+        vesting.claim(alice, categoryId, vestingId, claimed);
 
         (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
 
@@ -752,7 +812,7 @@ contract TfiVestingTest is Test {
         vm.startPrank(alice);
 
         uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
-        vesting.claim(categoryId, vestingId, claimAmount);
+        vesting.claim(alice, categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -800,7 +860,7 @@ contract TfiVestingTest is Test {
 
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
         uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
-        vesting.claim(categoryId, vestingId, claimAmount);
+        vesting.claim(alice, categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -902,7 +962,7 @@ contract TfiVestingTest is Test {
         vm.startPrank(alice);
 
         uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
-        vesting.claim(categoryId, vestingId, claimAmount);
+        vesting.claim(alice, categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -917,7 +977,8 @@ contract TfiVestingTest is Test {
 
         uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
 
-        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
+        (string memory _category, uint256 _maxAllocation, uint256 _allocated, bool _adminClaimable) =
+            vesting.categories(categoryId);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit CancelVesting(categoryId, vestingId, alice, false);
@@ -927,7 +988,7 @@ contract TfiVestingTest is Test {
         assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
 
         _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
-        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed - amount);
+        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable);
         assertEq(tfiToken.balanceOf(address(vesting)), vestingBalanceBefore, "Token does not move after cancel");
 
         vm.stopPrank();
@@ -947,7 +1008,7 @@ contract TfiVestingTest is Test {
         vm.startPrank(alice);
 
         uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
-        vesting.claim(categoryId, vestingId, claimAmount);
+        vesting.claim(alice, categoryId, vestingId, claimAmount);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -962,7 +1023,8 @@ contract TfiVestingTest is Test {
 
         uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
 
-        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
+        (string memory _category, uint256 _maxAllocation, uint256 _allocated, bool _adminClaimable) =
+            vesting.categories(categoryId);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit CancelVesting(categoryId, vestingId, alice, true);
@@ -972,7 +1034,9 @@ contract TfiVestingTest is Test {
         assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
 
         _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
-        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed + claimable - amount);
+        _validateCategory(
+            categoryId, _category, _maxAllocation, _allocated + claimed + claimable - amount, _adminClaimable
+        );
         assertEq(
             tfiToken.balanceOf(address(vesting)), vestingBalanceBefore - claimable, "Token does not move after cancel"
         );
@@ -997,7 +1061,7 @@ contract TfiVestingTest is Test {
         vm.startPrank(alice);
 
         uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
-        vesting.claim(categoryId, vestingId, claimAmount);
+        vesting.claim(alice, categoryId, vestingId, claimAmount);
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
@@ -1013,7 +1077,8 @@ contract TfiVestingTest is Test {
 
         uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
 
-        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
+        (string memory _category, uint256 _maxAllocation, uint256 _allocated, bool _adminClaimable) =
+            vesting.categories(categoryId);
 
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
 
@@ -1025,7 +1090,7 @@ contract TfiVestingTest is Test {
         assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
 
         _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
-        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed - amount);
+        _validateCategory(categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable);
         assertEq(
             tfiToken.balanceOf(address(vesting)), vestingBalanceBefore + stakeAmount, "Token does not move after cancel"
         );
@@ -1093,12 +1158,14 @@ contract TfiVestingTest is Test {
         vm.startPrank(owner);
 
         tfiToken.approve(address(vesting), type(uint256).max);
-        vesting.setVestingCategory(type(uint256).max, "Preseed", 171_400e18);
-        vesting.setVestingCategory(type(uint256).max, "Seed", 391_000e18);
-        vesting.setVestingCategory(type(uint256).max, "Private", 343_000e18);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 171_400e18, false);
+        vesting.setVestingCategory(type(uint256).max, "Seed", 391_000e18, false);
+        vesting.setVestingCategory(type(uint256).max, "Private", 343_000e18, false);
+        vesting.setVestingCategory(type(uint256).max, "Liquidity", 120_000e18, true);
         vesting.setVestingInfo(0, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
         vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
         vesting.setVestingInfo(2, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
+        vesting.setVestingInfo(3, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
 
         vm.stopPrank();
     }
@@ -1108,17 +1175,24 @@ contract TfiVestingTest is Test {
 
         vesting.setUserVesting(0, 0, alice, 0, 100e18);
         vesting.setUserVesting(0, 0, bob, 0, 200e18);
+        vesting.setUserVesting(3, 0, carol, 0, 200e18);
 
         vm.stopPrank();
     }
 
-    function _validateCategory(uint256 categoryId, string memory category, uint256 maxAllocation, uint256 allocated)
-        internal
-    {
-        (string memory _category, uint256 _maxAllocation, uint256 _allocated) = vesting.categories(categoryId);
+    function _validateCategory(
+        uint256 categoryId,
+        string memory category,
+        uint256 maxAllocation,
+        uint256 allocated,
+        bool adminClaimable
+    ) internal {
+        (string memory _category, uint256 _maxAllocation, uint256 _allocated, bool _adminClaimable) =
+            vesting.categories(categoryId);
         assertEq(_category, category, "Category name is invalid");
         assertEq(_maxAllocation, maxAllocation, "Max allocation is invalid");
         assertEq(_allocated, allocated, "Allocated amount is invalid");
+        assertEq(_adminClaimable, adminClaimable, "Admin claimable flag is invalid");
     }
 
     function _validateVestingInfo(

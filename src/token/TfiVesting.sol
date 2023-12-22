@@ -10,14 +10,14 @@ import {Errors} from "../libraries/Errors.sol";
 /**
  * @title TFI vesting contract
  * @author Ryuhei Matsuda
- * @notice Admin register vesting information for users,
- *      and users could lock vesting to veTFI to get voting power and TFI staking rewards
+ * @notice Admin registers vesting information for users,
+ *      and users could claim or lock vesting to veTFI to get voting power and TFI staking rewards
  */
 contract TfiVesting is Ownable {
     using SafeERC20 for IERC20;
 
     /// @dev Emitted when vesting category is set
-    event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation);
+    event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation, bool adminClaimable);
 
     /// @dev Emitted when vesting info is set
     event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, VestingInfo info);
@@ -66,6 +66,7 @@ contract TfiVesting is Ownable {
         string category; // Category name
         uint256 maxAllocation; // Maximum allocation for this category
         uint256 allocated; // Current allocated amount
+        bool adminClaimable; // Allow admin to claim if value is true
     }
 
     /// @dev Vesting info struct
@@ -169,23 +170,30 @@ contract TfiVesting is Ownable {
 
     /**
      * @notice Claim available amount
+     * @dev Owner is able to claim for admin claimable categories.
+     * @param user user account(For non-admin claimable categories, it must be msg.sender)
      * @param categoryId category id
      * @param vestingId vesting id
      * @param claimAmount token amount to claim
      */
-    function claim(uint256 categoryId, uint256 vestingId, uint256 claimAmount) public {
+    function claim(address user, uint256 categoryId, uint256 vestingId, uint256 claimAmount) public {
         if (claimAmount == 0) {
             revert Errors.ZeroAmount();
         }
-        uint256 claimableAmount = claimable(categoryId, vestingId, msg.sender);
+
+        if (user != msg.sender && (!categories[categoryId].adminClaimable || msg.sender != owner())) {
+            revert Errors.Forbidden(msg.sender);
+        }
+
+        uint256 claimableAmount = claimable(categoryId, vestingId, user);
         if (claimAmount > claimableAmount) {
             revert Errors.ClaimAmountExceed();
         }
 
-        userVestings[categoryId][vestingId][msg.sender].claimed += claimAmount;
-        tfiToken.safeTransfer(msg.sender, claimAmount);
+        userVestings[categoryId][vestingId][user].claimed += claimAmount;
+        tfiToken.safeTransfer(user, claimAmount);
 
-        emit Claimed(categoryId, vestingId, msg.sender, claimAmount);
+        emit Claimed(categoryId, vestingId, user, claimAmount);
     }
 
     /**
@@ -347,12 +355,17 @@ contract TfiVesting is Ownable {
      * @dev Only admin can set vesting category
      * @param id id to modify or uint256.max to add new category
      * @param category new vesting category
+     * @param maxAllocation Max allocation amount for this category
+     * @param adminClaimable Admin claimable flag
      */
-    function setVestingCategory(uint256 id, string calldata category, uint256 maxAllocation) public onlyOwner {
+    function setVestingCategory(uint256 id, string calldata category, uint256 maxAllocation, bool adminClaimable)
+        public
+        onlyOwner
+    {
         int256 tokenMove;
         if (id == type(uint256).max) {
             id = categories.length;
-            categories.push(VestingCategory(category, maxAllocation, 0));
+            categories.push(VestingCategory(category, maxAllocation, 0, adminClaimable));
             tokenMove = int256(maxAllocation);
         } else {
             if (categories[id].allocated > maxAllocation) {
@@ -369,7 +382,7 @@ contract TfiVesting is Ownable {
             tfiToken.safeTransfer(msg.sender, uint256(-tokenMove));
         }
 
-        emit VestingCategorySet(id, category, maxAllocation);
+        emit VestingCategorySet(id, category, maxAllocation, adminClaimable);
     }
 
     /**
