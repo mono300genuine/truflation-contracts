@@ -42,4 +42,8 @@ library Errors {
     error NotMigrate();
     error TooShort();
     error TooLong();
+
+    // TfiMigrator
+    error InvalidProof();
+    error AlreadyMigrated();
 }

@@ -9,6 +9,7 @@ import {RewardsSource} from "../interfaces/RewardsSource.sol";
 import {IVirtualStakingRewards} from "../interfaces/IVirtualStakingRewards.sol";
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
 import {Errors} from "../libraries/Errors.sol";
+
 /**
  * @title VotingEscrowTFI smart contract (modified from Origin Staking for Truflation)
  * @author Ryuhei Matsuda

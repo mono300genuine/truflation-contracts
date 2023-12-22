@@ -3,4 +3,4 @@ erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/
 forge-std/=lib/forge-std/src/
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 @uniswap/v2-periphery/=lib/uniswap-v2-periphery/contracts/
-paulrberg/prb-math/contracts/=lib/prb-math/contracts/
+murky/src/=lib/murky/src/

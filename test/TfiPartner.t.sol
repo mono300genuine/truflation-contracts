@@ -21,7 +21,7 @@ contract TfiPartnerTest is Test {
     IERC20 public lpToken;
     StakingRewards public lpStaking;
     IUniswapV2Router01 public uniswapRouter = IUniswapV2Router01(address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D));
-    IUniswapV2Factory public uniswapFactory = IUniswapV2Factory(uniswapRouter.factory());
+    IUniswapV2Factory public uniswapFactory;
 
     bytes32 public partnerId = keccak256(abi.encode("Test Partner"));
     uint256 public period = 86400 * 365; // 1 year
@@ -34,6 +34,12 @@ contract TfiPartnerTest is Test {
     uint256 public lpReward = 100e18;
 
     function setUp() public {
+        string memory key = "MAINNET_RPC_URL";
+        string memory output = vm.envString(key);
+        uint256 mainnetFork = vm.createFork(output);
+
+        vm.selectFork(mainnetFork);
+
         pToken = new MockERC20(18);
         usdtToken = new MockERC20(6);
         tfiToken = new MockERC20(18);
@@ -46,6 +52,8 @@ contract TfiPartnerTest is Test {
         vm.label(bob, "Bob");
         vm.label(gov, "Truflation Gov");
         vm.label(pOwner, "Protocol owner");
+
+        uniswapFactory = IUniswapV2Factory(uniswapRouter.factory());
 
         usdtToken.mint(address(this), 1e12); // mint 1,000,000 USDT
         tfiToken.mint(address(this), 3e23); // mint 300,000 TFI
