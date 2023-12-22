@@ -8,7 +8,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {RewardsSource} from "../interfaces/RewardsSource.sol";
 import {IVirtualStakingRewards} from "../interfaces/IVirtualStakingRewards.sol";
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
-import {Errors} from "../libraries/Errors.sol";
 
 /**
  * @title VotingEscrowTFI smart contract (modified from Origin Staking for Truflation)
@@ -22,6 +21,21 @@ import {Errors} from "../libraries/Errors.sol";
 
 contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     using SafeERC20 for IERC20;
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error Forbidden(address sender);
+    error InvalidAmount();
+    error InvalidAccount();
+    error TransferDisabled();
+    error MaxPointsExceeded();
+    error NoAccess();
+    error LockupAlreadyUnstaked();
+    error LockupNotEnded();
+    error NotIncrease();
+    error NotMigrate();
+    error TooShort();
+    error TooLong();
 
     // 1. Core Storage
     /// @dev minimum staking duration in seconds
@@ -47,7 +61,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
 
     modifier onlyVesting() {
         if (msg.sender != tfiVesting) {
-            revert Errors.Forbidden(msg.sender);
+            revert Forbidden(msg.sender);
         }
         _;
     }
@@ -65,7 +79,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     function _transfer(address, address, uint256) internal override {
-        revert Errors.TransferDisabled();
+        revert TransferDisabled();
     }
 
     // 2. Staking and Lockup Functions
@@ -96,7 +110,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         returns (uint256 lockupId)
     {
         if (to == tfiVesting) {
-            revert Errors.InvalidAccount();
+            revert InvalidAccount();
         }
         lockupId = _stake(amount, duration, to, true);
     }
@@ -122,19 +136,19 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
      */
     function _stake(uint256 amount, uint256 duration, address to, bool isVesting) internal returns (uint256 lockupId) {
         if (to == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         if (amount == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
         if (amount > type(uint128).max) {
-            revert Errors.InvalidAmount();
+            revert InvalidAmount();
         }
 
         // duration checked inside previewPoints
         (uint256 points, uint256 end) = previewPoints(amount, duration);
         if (points + totalSupply() > type(uint192).max) {
-            revert Errors.MaxPointsExceeded();
+            revert MaxPointsExceeded();
         }
 
         lockups[to].push(
@@ -213,14 +227,14 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         returns (uint256 newLockupId)
     {
         if (oldUser == newUser) {
-            revert Errors.NotMigrate();
+            revert NotMigrate();
         }
         if (newUser == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         Lockup memory oldLockup = lockups[oldUser][lockupId];
         if (!oldLockup.isVesting) {
-            revert Errors.NoAccess();
+            revert NoAccess();
         }
 
         uint256 points = oldLockup.points;
@@ -255,10 +269,10 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
      */
     function previewPoints(uint256 amount, uint256 duration) public view returns (uint256 points, uint256 end) {
         if (duration < minStakeDuration) {
-            revert Errors.TooShort();
+            revert TooShort();
         }
         if (duration > MAX_DURATION) {
-            revert Errors.TooLong();
+            revert TooLong();
         }
 
         points = amount * duration / MAX_DURATION;
@@ -275,16 +289,16 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     function _unstake(address user, uint256 lockupId, bool isVesting, bool force) internal returns (uint256 amount) {
         Lockup memory lockup = lockups[user][lockupId];
         if (lockup.isVesting != isVesting) {
-            revert Errors.NoAccess();
+            revert NoAccess();
         }
         amount = lockup.amount;
         uint256 end = lockup.end;
         uint256 points = lockup.points;
         if (end == 0) {
-            revert Errors.LockupAlreadyUnstaked();
+            revert LockupAlreadyUnstaked();
         }
         if (!force && block.timestamp < end) {
-            revert Errors.LockupNotEnded();
+            revert LockupNotEnded();
         }
         delete lockups[user][lockupId]; // Keeps empty in array, so indexes are stable
 
@@ -320,7 +334,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         // duration checked inside previewPoints
         Lockup memory lockup = lockups[user][lockupId];
         if (lockup.isVesting != isVesting) {
-            revert Errors.NoAccess();
+            revert NoAccess();
         }
 
         uint256 amount = lockup.amount;
@@ -331,7 +345,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         (uint256 newPoints,) = previewPoints(amount, newDuration);
 
         if (newPoints <= oldPoints) {
-            revert Errors.NotIncrease();
+            revert NotIncrease();
         }
 
         uint256 newEnd = oldEnd + duration;

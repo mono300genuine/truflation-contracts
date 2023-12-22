@@ -232,6 +232,20 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testSetVestingCategory_AfterTge() external {
+        console.log("Should revert when sender is not owner");
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        vm.warp(tgeTime + 1);
+
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSignature("VestingStarted(uint64)", tgeTime));
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+
+        vm.stopPrank();
+    }
+
     function testSetVestingInfo_AddFirstVestingInfo() external {
         console.log("Add first vesting info");
 
@@ -321,7 +335,6 @@ contract TfiVestingTest is Test {
         _setupVestingPlan();
 
         uint256 amount = 100e18;
-        uint64 tgeTime = vesting.tgeTime();
         uint256 categoryId = 4;
         vm.startPrank(owner);
 
@@ -337,7 +350,6 @@ contract TfiVestingTest is Test {
         _setupVestingPlan();
 
         uint256 amount = 100e18;
-        uint64 tgeTime = vesting.tgeTime();
         uint256 categoryId = 0;
         uint256 vestingId = 4;
         vm.startPrank(owner);

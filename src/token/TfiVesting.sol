@@ -5,7 +5,6 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
-import {Errors} from "../libraries/Errors.sol";
 
 /**
  * @title TFI vesting contract
@@ -15,6 +14,23 @@ import {Errors} from "../libraries/Errors.sol";
  */
 contract TfiVesting is Ownable {
     using SafeERC20 for IERC20;
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error Forbidden(address sender);
+    error InvalidTimestamp();
+    error InvalidAmount();
+    error VestingStarted(uint64 tge);
+    error InvalidVestingCategory(uint256 id);
+    error InvalidVestingInfo(uint256 categoryIdx, uint256 id);
+    error InvalidUserVesting();
+    error ClaimAmountExceed();
+    error UserVestingAlreadySet(uint256 categoryIdx, uint256 vestingId, address user);
+    error UserVestingDoesNotExists(uint256 categoryIdx, uint256 vestingId, address user);
+    error MaxAllocationExceed();
+    error AlreadyVested(uint256 categoryIdx, uint256 vestingId, address user);
+    error LockExist();
+    error LockDoesNotExist();
 
     /// @dev Emitted when vesting category is set
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation, bool adminClaimable);
@@ -114,12 +130,12 @@ contract TfiVesting is Ownable {
      * @param _tfiToken TFI token address
      */
     constructor(IERC20 _tfiToken, uint64 _tgeTime) {
-        if (address(_tfiToken) == address(0)) revert Errors.ZeroAddress();
+        if (address(_tfiToken) == address(0)) revert ZeroAddress();
 
         tfiToken = _tfiToken;
 
         if (_tgeTime < block.timestamp) {
-            revert Errors.InvalidTimestamp();
+            revert InvalidTimestamp();
         }
         tgeTime = _tgeTime;
     }
@@ -178,16 +194,16 @@ contract TfiVesting is Ownable {
      */
     function claim(address user, uint256 categoryId, uint256 vestingId, uint256 claimAmount) public {
         if (claimAmount == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
 
         if (user != msg.sender && (!categories[categoryId].adminClaimable || msg.sender != owner())) {
-            revert Errors.Forbidden(msg.sender);
+            revert Forbidden(msg.sender);
         }
 
         uint256 claimableAmount = claimable(categoryId, vestingId, user);
         if (claimAmount > claimableAmount) {
-            revert Errors.ClaimAmountExceed();
+            revert ClaimAmountExceed();
         }
 
         userVestings[categoryId][vestingId][user].claimed += claimAmount;
@@ -205,16 +221,16 @@ contract TfiVesting is Ownable {
      */
     function stake(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
         if (amount == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
         if (lockupIds[categoryId][vestingId][msg.sender] != 0) {
-            revert Errors.LockExist();
+            revert LockExist();
         }
 
         UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
 
         if (amount > userVesting.amount - userVesting.claimed - userVesting.locked) {
-            revert Errors.InvalidAmount();
+            revert InvalidAmount();
         }
 
         userVesting.locked += amount;
@@ -235,7 +251,7 @@ contract TfiVesting is Ownable {
     function extendStaking(uint256 categoryId, uint256 vestingId, uint256 duration) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
-            revert Errors.LockDoesNotExist();
+            revert LockDoesNotExist();
         }
 
         veTFI.extendVestingLock(msg.sender, lockupId - 1, duration);
@@ -251,7 +267,7 @@ contract TfiVesting is Ownable {
     function unstake(uint256 categoryId, uint256 vestingId) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
-            revert Errors.LockDoesNotExist();
+            revert LockDoesNotExist();
         }
 
         uint256 amount = veTFI.unstakeVesting(msg.sender, lockupId - 1, false);
@@ -277,10 +293,10 @@ contract TfiVesting is Ownable {
         UserVesting storage newVesting = userVestings[categoryId][vestingId][newUser];
 
         if (newVesting.amount != 0) {
-            revert Errors.UserVestingAlreadySet(categoryId, vestingId, newUser);
+            revert UserVestingAlreadySet(categoryId, vestingId, newUser);
         }
         if (prevVesting.amount == 0) {
-            revert Errors.UserVestingDoesNotExists(categoryId, vestingId, prevUser);
+            revert UserVestingDoesNotExists(categoryId, vestingId, prevUser);
         }
 
         newVesting.amount = prevVesting.amount;
@@ -317,11 +333,11 @@ contract TfiVesting is Ownable {
         UserVesting memory userVesting = userVestings[categoryId][vestingId][user];
 
         if (userVesting.amount == 0) {
-            revert Errors.UserVestingDoesNotExists(categoryId, vestingId, user);
+            revert UserVestingDoesNotExists(categoryId, vestingId, user);
         }
 
         if (userVesting.startTime + vestingInfos[categoryId][vestingId].period <= block.timestamp) {
-            revert Errors.AlreadyVested(categoryId, vestingId, user);
+            revert AlreadyVested(categoryId, vestingId, user);
         }
 
         uint256 lockupId = lockupIds[categoryId][vestingId][user];
@@ -362,6 +378,10 @@ contract TfiVesting is Ownable {
         public
         onlyOwner
     {
+        if (block.timestamp >= tgeTime) {
+            revert VestingStarted(tgeTime);
+        }
+
         int256 tokenMove;
         if (id == type(uint256).max) {
             id = categories.length;
@@ -369,7 +389,7 @@ contract TfiVesting is Ownable {
             tokenMove = int256(maxAllocation);
         } else {
             if (categories[id].allocated > maxAllocation) {
-                revert Errors.MaxAllocationExceed();
+                revert MaxAllocationExceed();
             }
             tokenMove = int256(maxAllocation) - int256(categories[id].maxAllocation);
             categories[id].maxAllocation = maxAllocation;
@@ -418,10 +438,10 @@ contract TfiVesting is Ownable {
         onlyOwner
     {
         if (categoryId >= categories.length) {
-            revert Errors.InvalidVestingCategory(categoryId);
+            revert InvalidVestingCategory(categoryId);
         }
         if (vestingId >= vestingInfos[categoryId].length) {
-            revert Errors.InvalidVestingInfo(categoryId, vestingId);
+            revert InvalidVestingInfo(categoryId, vestingId);
         }
 
         VestingCategory storage category = categories[categoryId];
@@ -430,13 +450,13 @@ contract TfiVesting is Ownable {
         category.allocated += amount;
         category.allocated -= userVesting.amount;
         if (category.allocated > category.maxAllocation) {
-            revert Errors.MaxAllocationExceed();
+            revert MaxAllocationExceed();
         }
 
         if (amount < userVesting.claimed + userVesting.locked) {
-            revert Errors.InvalidUserVesting();
+            revert InvalidUserVesting();
         }
-        if (startTime != 0 && startTime < tgeTime) revert Errors.InvalidTimestamp();
+        if (startTime != 0 && startTime < tgeTime) revert InvalidTimestamp();
 
         userVesting.amount = amount;
         userVesting.startTime = startTime == 0 ? tgeTime : startTime;
@@ -451,7 +471,7 @@ contract TfiVesting is Ownable {
      */
     function setVeTfi(address _veTFI) external onlyOwner {
         if (_veTFI == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         veTFI = IVotingEscrow(_veTFI);
 

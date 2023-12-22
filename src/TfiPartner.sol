@@ -6,10 +6,16 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IUniswapV2Router01.sol";
 import "./interfaces/IStakingRewards.sol";
-import "./libraries/Errors.sol";
 
 contract TfiPartner is Ownable {
     using SafeERC20 for IERC20;
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error Forbidden(address sender);
+    error InvalidTimestamp();
+    error InvalidStatus(bytes32 partnerId);
+    error AddLiquidityFailed();
 
     event Initiated(
         bytes32 indexed id,
@@ -63,7 +69,7 @@ contract TfiPartner is Ownable {
             _tfiToken == address(0) || _pairToken == address(0) || _lpToken == address(0) || _lpStaking == address(0)
                 || _uniV2Router == address(0)
         ) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
 
         tfiToken = IERC20(_tfiToken);
@@ -85,14 +91,14 @@ contract TfiPartner is Ownable {
         _checkOwner();
 
         if (period == 0 || pTokenAmount == 0 || tfiAmount == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
-        if (startTime < block.timestamp) revert Errors.InvalidTimestamp();
+        if (startTime < block.timestamp) revert InvalidTimestamp();
         if (pToken == address(0) || pOwner == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         if (subscriptions[id].status != Status.None) {
-            revert Errors.InvalidStatus(id);
+            revert InvalidStatus(id);
         }
 
         tfiToken.safeTransferFrom(msg.sender, address(this), tfiAmount);
@@ -115,13 +121,13 @@ contract TfiPartner is Ownable {
     function pay(bytes32 id, uint256 pairTokenMaxIn, uint256 lpTokenMinOut, uint256 deadline) external {
         Subscription storage subscription = subscriptions[id];
         if (subscription.status != Status.Initiated) {
-            revert Errors.InvalidStatus(id);
+            revert InvalidStatus(id);
         }
         if (subscription.pOwner != msg.sender) {
-            revert Errors.Forbidden(msg.sender);
+            revert Forbidden(msg.sender);
         }
         if (subscription.startTime < block.timestamp) {
-            revert Errors.InvalidTimestamp();
+            revert InvalidTimestamp();
         }
 
         subscription.status = Status.Active;
@@ -139,7 +145,7 @@ contract TfiPartner is Ownable {
             address(this),
             deadline
         );
-        if (lpAmount < lpTokenMinOut) revert Errors.AddLiquidityFailed();
+        if (lpAmount < lpTokenMinOut) revert AddLiquidityFailed();
         if (pairTokenMaxIn > pairTokenIn) {
             pairToken.safeTransfer(msg.sender, pairTokenMaxIn - pairTokenIn);
         }
@@ -164,10 +170,10 @@ contract TfiPartner is Ownable {
 
         Subscription storage subscription = subscriptions[id];
         if (subscription.status != Status.Active) {
-            revert Errors.InvalidStatus(id);
+            revert InvalidStatus(id);
         }
         if (subscription.startTime + subscription.period >= block.timestamp) {
-            revert Errors.InvalidTimestamp();
+            revert InvalidTimestamp();
         }
 
         subscription.status = Status.Ended;
@@ -205,7 +211,7 @@ contract TfiPartner is Ownable {
 
         if (subscription.status == Status.Initiated) {
             if (subscription.startTime > block.timestamp) {
-                revert Errors.InvalidTimestamp();
+                revert InvalidTimestamp();
             }
 
             uint256 tfiAmount = subscription.tfiAmount;
@@ -216,7 +222,7 @@ contract TfiPartner is Ownable {
             tfiToken.safeTransfer(owner(), tfiAmount);
         } else if (subscription.status == Status.Active) {
             if (subscription.startTime + subscription.period < block.timestamp) {
-                revert Errors.InvalidTimestamp();
+                revert InvalidTimestamp();
             }
 
             subscription.status = Status.Cancelled;
@@ -252,7 +258,7 @@ contract TfiPartner is Ownable {
 
             emit Cancelled(id, tfiTokenOut, pairTokenOut, pTokenPaid, tfiReward);
         } else {
-            revert Errors.InvalidStatus(id);
+            revert InvalidStatus(id);
         }
     }
 

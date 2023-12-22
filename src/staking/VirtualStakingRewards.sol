@@ -6,10 +6,15 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../interfaces/IVirtualStakingRewards.sol";
-import "../libraries/Errors.sol";
 
 contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
     using SafeERC20 for IERC20;
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error Forbidden(address sender);
+    error RewardPeriodNotFinished();
+    error InsufficientRewards();
 
     /* ========== STATE VARIABLES ========== */
 
@@ -33,14 +38,14 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
 
     modifier onlyRewardsDistribution() {
         if (msg.sender != rewardsDistribution) {
-            revert Errors.Forbidden(msg.sender);
+            revert Forbidden(msg.sender);
         }
         _;
     }
 
     modifier onlyOperator() {
         if (msg.sender != operator) {
-            revert Errors.Forbidden(msg.sender);
+            revert Forbidden(msg.sender);
         }
         _;
     }
@@ -59,7 +64,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
 
     constructor(address _rewardsDistribution, address _rewardsToken) {
         if (_rewardsToken == address(0) || _rewardsDistribution == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         rewardsToken = _rewardsToken;
         rewardsDistribution = _rewardsDistribution;
@@ -99,10 +104,10 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
 
     function stake(address user, uint256 amount) external updateReward(user) onlyOperator {
         if (amount == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
         if (user == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         _totalSupply += amount;
         _balances[user] += amount;
@@ -111,7 +116,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
 
     function withdraw(address user, uint256 amount) public updateReward(user) onlyOperator {
         if (amount == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
         _totalSupply -= amount;
         _balances[user] -= amount;
@@ -151,7 +156,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
         // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
         uint256 balance = IERC20(rewardsToken).balanceOf(address(this));
         if (rewardRate > balance / rewardsDuration) {
-            revert Errors.InsufficientRewards();
+            revert InsufficientRewards();
         }
 
         lastUpdateTime = block.timestamp;
@@ -161,10 +166,10 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
 
     function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
         if (block.timestamp <= periodFinish) {
-            revert Errors.RewardPeriodNotFinished();
+            revert RewardPeriodNotFinished();
         }
         if (_rewardsDuration == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
 
         rewardsDuration = _rewardsDuration;
@@ -173,7 +178,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
 
     function setRewardsDistribution(address _rewardsDistribution) external onlyOwner {
         if (_rewardsDistribution == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         rewardsDistribution = _rewardsDistribution;
 
@@ -182,7 +187,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
 
     function setOperator(address _operator) external onlyOwner {
         if (_operator == address(0)) {
-            revert Errors.ZeroAddress();
+            revert ZeroAddress();
         }
         operator = _operator;
 

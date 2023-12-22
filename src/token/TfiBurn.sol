@@ -3,7 +3,6 @@ pragma solidity 0.8.19;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Errors} from "../libraries/Errors.sol";
 
 /**
  * @title TfiBurn smart contract
@@ -12,6 +11,8 @@ import {Errors} from "../libraries/Errors.sol";
  */
 contract TfiBurn {
     using SafeERC20 for IERC20;
+
+    error ZeroAmount();
 
     event BurnedOldTfi(address indexed user, uint256 amount);
 
@@ -25,7 +26,7 @@ contract TfiBurn {
 
     function burnOldTfi(uint256 amount) public {
         if (amount == 0) {
-            revert Errors.ZeroAmount();
+            revert ZeroAmount();
         }
 
         oldTfi.safeTransferFrom(msg.sender, BURN_ADDRESS, amount);

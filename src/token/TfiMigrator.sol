@@ -5,7 +5,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {Errors} from "../libraries/Errors.sol";
 
 /**
  * @title TfiMigrator smart contract
@@ -14,6 +13,9 @@ import {Errors} from "../libraries/Errors.sol";
  */
 contract TfiMigrator is Ownable2Step {
     using SafeERC20 for IERC20;
+
+    error InvalidProof();
+    error AlreadyMigrated();
 
     event SetMerkleRoot(bytes32 merkleRoot);
     event Migrated(address indexed user, uint256 amount);
@@ -36,13 +38,13 @@ contract TfiMigrator is Ownable2Step {
         bytes32 leaf = keccak256(abi.encode(msg.sender, index, amount));
 
         if (MerkleProof.verify(proof, merkleRoot, leaf) == false) {
-            revert Errors.InvalidProof();
+            revert InvalidProof();
         }
 
         uint256 _migratedAmount = migratedAmount[msg.sender];
 
         if (amount <= _migratedAmount) {
-            revert Errors.AlreadyMigrated();
+            revert AlreadyMigrated();
         }
 
         migratedAmount[msg.sender] = amount;
