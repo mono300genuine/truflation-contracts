@@ -165,10 +165,6 @@ contract TfiVesting is Ownable {
         if (userVesting.startTime > block.timestamp) {
             return 0;
         }
-        uint256 totalAmount = userVesting.amount;
-        if (totalAmount == 0) {
-            return 0;
-        }
 
         VestingInfo memory info = vestingInfos[categoryId][vestingId];
 
@@ -177,6 +173,9 @@ contract TfiVesting is Ownable {
         if (timeElapsed < info.initialReleasePeriod) {
             return 0;
         }
+
+        uint256 totalAmount = userVesting.amount;
+
         uint256 initialRelease = (totalAmount * info.initialReleasePct) / DENOMINATOR;
         uint256 vestedAmount = (
             timeElapsed < info.cliff ? 0 : ((totalAmount - initialRelease) * timeElapsed) / info.period
@@ -481,6 +480,9 @@ contract TfiVesting is Ownable {
         public
         onlyOwner
     {
+        if (amount == 0) {
+            revert ZeroAmount();
+        }
         if (categoryId >= categories.length) {
             revert InvalidVestingCategory(categoryId);
         }

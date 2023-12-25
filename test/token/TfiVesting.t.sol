@@ -563,6 +563,37 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testSetUserVesting_Revert_WhenSenderIsNotOwner() external {
+        console.log("Should revert to set user vesting when msg.sender is not owner");
+
+        _setupVestingPlan();
+
+        uint256 amount = 100e18;
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(alice);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
+
+        vm.stopPrank();
+    }
+
+    function testSetUserVesting_Revert_WhenAmountIsZero() external {
+        console.log("Should revert to set user vesting when amount is zero");
+
+        _setupVestingPlan();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
+        vesting.setUserVesting(categoryId, vestingId, alice, 0, 0);
+
+        vm.stopPrank();
+    }
+
     function testSetVeTfi() external {
         console.log("Set veTFI");
 
