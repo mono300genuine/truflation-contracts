@@ -55,7 +55,7 @@ contract TfiMigrator is Ownable2Step {
         emit Migrated(msg.sender, migrateAmount);
     }
 
-    function withdrawToken(uint256 amount) external onlyOwner {
+    function withdrawTfi(uint256 amount) external onlyOwner {
         tfiToken.safeTransfer(msg.sender, amount);
     }
 }

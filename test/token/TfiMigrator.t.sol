@@ -9,6 +9,7 @@ import "../../src/token/TruflationToken.sol";
 import "../../src/token/TfiMigrator.sol";
 
 contract TfiMigratorTest is Test, Merkle {
+    event Transfer(address indexed from, address indexed to, uint256 value);
     event SetMerkleRoot(bytes32 merkleRoot);
     event Migrated(address indexed user, uint256 amount);
 
@@ -146,6 +147,29 @@ contract TfiMigratorTest is Test, Merkle {
         vm.expectRevert(abi.encodeWithSignature("AlreadyMigrated()"));
 
         tfiMigrator.migrate(index, amount, getProof(leaves, index));
+
+        vm.stopPrank();
+    }
+
+    function testWithdrawTfi() external {
+        uint256 amount = 1e18;
+
+        vm.startPrank(owner);
+
+        vm.expectEmit(true, true, true, true, address(tfiToken));
+        emit Transfer(address(tfiMigrator), owner, amount);
+        tfiMigrator.withdrawTfi(amount);
+
+        vm.stopPrank();
+    }
+
+    function testWithdrawTfiFailures() external {
+        console.log("Revert if msg.sender is not owner");
+
+        vm.startPrank(alice);
+        vm.expectRevert("Ownable: caller is not the owner");
+
+        tfiMigrator.withdrawTfi(100);
 
         vm.stopPrank();
     }
