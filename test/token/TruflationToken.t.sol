@@ -19,7 +19,7 @@ contract TruflationTokenTest is Test {
     string public name = "Truflation";
     string public symbol = "TFI";
     uint8 public decimals = 18;
-    uint256 public totalSupply = 100_000_000 * 1e18;
+    uint256 public totalSupply = 1_000_000_000e18;
 
     function setUp() public {
         tfiToken = new TruflationToken();
