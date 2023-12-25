@@ -10,6 +10,7 @@ import "../../src/staking/VirtualStakingRewards.sol";
 
 contract TfiVestingTest is Test {
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation, bool adminClaimable);
+    event EmissionScheduleSet(uint256 indexed categoryId, uint256[] emissions);
     event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, TfiVesting.VestingInfo info);
     event UserVestingSet(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint64 startTime
@@ -232,6 +233,16 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testSetVestingCategory_Revert_WhenMaxAllocationIsZero() external {
+        console.log("Should revert when max allocation is zero");
+
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 0, false);
+
+        vm.stopPrank();
+    }
+
     function testSetVestingCategory_AfterTge() external {
         console.log("Should revert when sender is not owner");
 
@@ -242,6 +253,126 @@ contract TfiVestingTest is Test {
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSignature("VestingStarted(uint64)", tgeTime));
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+
+        vm.stopPrank();
+    }
+
+    function testSetEmissionSchedule() external {
+        console.log("Set Emission schedule");
+
+        uint256 maxAllocation = 1e20;
+
+        vm.startPrank(owner);
+        tfiToken.approve(address(vesting), type(uint256).max);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = 0;
+        emissions[1] = 1e18;
+        emissions[2] = 2e18;
+        emissions[3] = 3e18;
+        emissions[4] = 1e20;
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit EmissionScheduleSet(0, emissions);
+        vesting.setEmissionSchedule(0, emissions);
+        _validateEmissionSchedule(0, emissions);
+
+        vm.stopPrank();
+    }
+
+    function testSetEmissionSchedule_Reset() external {
+        console.log("Re-set Emission schedule");
+
+        uint256 maxAllocation = 1e20;
+
+        vm.startPrank(owner);
+        tfiToken.approve(address(vesting), type(uint256).max);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = 0;
+        emissions[1] = 1e18;
+        emissions[2] = 2e18;
+        emissions[3] = 3e18;
+        emissions[4] = 1e20;
+
+        vesting.setEmissionSchedule(0, emissions);
+
+        emissions[0] = 1e19;
+        emissions[1] = 4e19;
+        emissions[2] = 8e19;
+        emissions[3] = 9e19;
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit EmissionScheduleSet(0, emissions);
+        vesting.setEmissionSchedule(0, emissions);
+        _validateEmissionSchedule(0, emissions);
+
+        vm.stopPrank();
+    }
+
+    function testSetEmissionSchedule_Revert_WhenSenderIsNotOwner() external {
+        console.log("Should revert when sender is not owner");
+
+        uint256 maxAllocation = 1e20;
+
+        vm.startPrank(owner);
+        tfiToken.approve(address(vesting), type(uint256).max);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
+
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = 0;
+        emissions[1] = 1e18;
+        emissions[2] = 2e18;
+        emissions[3] = 3e18;
+        emissions[4] = 1e20;
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        vesting.setEmissionSchedule(0, emissions);
+
+        vm.stopPrank();
+    }
+
+    function testSetEmissionSchedule_Revert_WhenLengthIsZero() external {
+        console.log("Should revert when emission schedule length is zero");
+
+        uint256 maxAllocation = 1e20;
+
+        vm.startPrank(owner);
+        tfiToken.approve(address(vesting), type(uint256).max);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
+
+        uint256[] memory emissions;
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidEmissions()"));
+        vesting.setEmissionSchedule(0, emissions);
+
+        vm.stopPrank();
+    }
+
+    function testSetEmissionSchedule_Revert_WhenLastItemIsNotSameAsMaxAllocation() external {
+        console.log("Should revert when last emission is not same as max allocation");
+
+        uint256 maxAllocation = 1e20;
+
+        vm.startPrank(owner);
+        tfiToken.approve(address(vesting), type(uint256).max);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = 0;
+        emissions[1] = 1e18;
+        emissions[2] = 2e18;
+        emissions[3] = 3e18;
+        emissions[4] = maxAllocation - 1;
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidEmissions()"));
+        vesting.setEmissionSchedule(0, emissions);
 
         vm.stopPrank();
     }
@@ -593,6 +724,165 @@ contract TfiVestingTest is Test {
         vesting.claim(alice, categoryId, vestingId, 1);
 
         vm.stopPrank();
+    }
+
+    function testGetEmission_Returns_ZeroBeforeTGE() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 1;
+        (, uint256 maxAllocation,,,) = vesting.categories(categoryId);
+
+        vm.startPrank(owner);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = maxAllocation / 5;
+        emissions[1] = maxAllocation / 5 * 2;
+        emissions[2] = maxAllocation / 5 * 3;
+        emissions[3] = maxAllocation / 5 * 4;
+        emissions[4] = maxAllocation;
+
+        vesting.setEmissionSchedule(categoryId, emissions);
+
+        vm.stopPrank();
+
+        uint64 tgeTime = vesting.tgeTime();
+        vm.warp(tgeTime - 1);
+
+        assertEq(vesting.getEmission(categoryId), 0, "Emission should be zero");
+    }
+
+    function testGetEmission_Returns_MaxAllocationIfNoEmissionSchedule() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 1;
+        (, uint256 maxAllocation,,,) = vesting.categories(categoryId);
+
+        uint64 tgeTime = vesting.tgeTime();
+        vm.warp(tgeTime + 100);
+
+        assertEq(vesting.getEmission(categoryId), maxAllocation, "Emission should be max allocation");
+    }
+
+    function testGetEmission_Returns_MaxAllocationAfterEndOfEmissionSchedule() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 1;
+        (, uint256 maxAllocation,,,) = vesting.categories(categoryId);
+
+        vm.startPrank(owner);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = maxAllocation / 5;
+        emissions[1] = maxAllocation / 5 * 2;
+        emissions[2] = maxAllocation / 5 * 3;
+        emissions[3] = maxAllocation / 5 * 4;
+        emissions[4] = maxAllocation;
+
+        vesting.setEmissionSchedule(categoryId, emissions);
+
+        vm.stopPrank();
+
+        uint64 tgeTime = vesting.tgeTime();
+        vm.warp(tgeTime + 5 * 30 days + 1);
+
+        assertEq(vesting.getEmission(categoryId), maxAllocation, "Emission should be max allocation");
+    }
+
+    function testGetEmission_FirstMonth() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 1;
+        (, uint256 maxAllocation,,,) = vesting.categories(categoryId);
+
+        vm.startPrank(owner);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = maxAllocation / 5;
+        emissions[1] = maxAllocation / 5 * 2;
+        emissions[2] = maxAllocation / 5 * 3;
+        emissions[3] = maxAllocation / 5 * 4;
+        emissions[4] = maxAllocation;
+
+        vesting.setEmissionSchedule(categoryId, emissions);
+
+        vm.stopPrank();
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        uint256 elapsed = 10 days;
+
+        vm.warp(tgeTime + elapsed);
+
+        assertEq(vesting.getEmission(categoryId), emissions[0] * 10 days / 30 days, "Invalid emission");
+    }
+
+    function testGetEmission_AfterFirstMonth() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 1;
+        (, uint256 maxAllocation,,,) = vesting.categories(categoryId);
+
+        vm.startPrank(owner);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = maxAllocation / 5;
+        emissions[1] = maxAllocation / 5 * 2;
+        emissions[2] = maxAllocation / 5 * 3;
+        emissions[3] = maxAllocation / 5 * 4;
+        emissions[4] = maxAllocation;
+
+        vesting.setEmissionSchedule(categoryId, emissions);
+
+        vm.stopPrank();
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        uint256 elapsed = 10 days + 60 days;
+
+        vm.warp(tgeTime + elapsed);
+
+        assertEq(
+            vesting.getEmission(categoryId),
+            (emissions[2] - emissions[1]) * 10 days / 30 days + emissions[1],
+            "Invalid emission"
+        );
+    }
+
+    function testGetEmission_Returns_MaxAllocationIfEmissionIsHigher() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 1;
+        (, uint256 maxAllocation,,,) = vesting.categories(categoryId);
+
+        vm.startPrank(owner);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = maxAllocation / 5;
+        emissions[1] = maxAllocation / 5 * 2;
+        emissions[2] = maxAllocation / 5 * 3;
+        emissions[3] = maxAllocation / 5 * 4;
+        emissions[4] = maxAllocation;
+
+        vesting.setEmissionSchedule(categoryId, emissions);
+
+        uint256 newMaxAllocation = emissions[3] - 100;
+        vesting.setVestingCategory(categoryId, "Preseed", newMaxAllocation, false);
+
+        vm.stopPrank();
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        uint256 elapsed = 10 days + 120 days;
+
+        vm.warp(tgeTime + elapsed);
+
+        assertEq(vesting.getEmission(categoryId), newMaxAllocation, "Invalid emission");
     }
 
     function testStake() external {
@@ -1221,6 +1511,15 @@ contract TfiVestingTest is Test {
         assertEq(_allocated, allocated, "Allocated amount is invalid");
         assertEq(_adminClaimable, adminClaimable, "Admin claimable flag is invalid");
         assertEq(_totalClaimed, totalClaimed, "Total claimed amount is invalid");
+    }
+
+    function _validateEmissionSchedule(uint256 categoryId, uint256[] memory emissions) internal {
+        uint256[] memory _emissions = vesting.getEmissionSchedule(categoryId);
+
+        assertEq(_emissions.length, emissions.length, "Emission is invalid");
+        for (uint256 i = 0; i < emissions.length; i += 1) {
+            assertEq(_emissions[i], emissions[i], "Emission is invalid");
+        }
     }
 
     function _validateVestingInfo(

@@ -22,6 +22,7 @@ contract TfiVesting is Ownable {
     error InvalidAmount();
     error VestingStarted(uint64 tge);
     error InvalidVestingCategory(uint256 id);
+    error InvalidEmissions();
     error InvalidVestingInfo(uint256 categoryIdx, uint256 id);
     error InvalidUserVesting();
     error ClaimAmountExceed();
@@ -34,6 +35,9 @@ contract TfiVesting is Ownable {
 
     /// @dev Emitted when vesting category is set
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation, bool adminClaimable);
+
+    /// @dev Emitted when emission schedule is set
+    event EmissionScheduleSet(uint256 indexed categoryId, uint256[] emissions);
 
     /// @dev Emitted when vesting info is set
     event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, VestingInfo info);
@@ -104,6 +108,7 @@ contract TfiVesting is Ownable {
     }
 
     uint256 public constant DENOMINATOR = 10000;
+    uint64 public constant ONE_MONTH = 30 days;
 
     /// @dev TFI token address
     IERC20 public immutable tfiToken;
@@ -116,6 +121,9 @@ contract TfiVesting is Ownable {
 
     /// @dev Vesting categories
     VestingCategory[] public categories;
+
+    // @dev Emission schedule per category. x index item of array indicates emission limit on x+1 months after TGE time.
+    mapping(uint256 => uint256[]) public emissionSchedule;
 
     /// @dev Vesting info per category
     mapping(uint256 => VestingInfo[]) public vestingInfos;
@@ -181,8 +189,12 @@ contract TfiVesting is Ownable {
         if (vestedAmount <= userVesting.claimed) {
             return 0;
         }
+        uint256 emissionLeft = getEmission(categoryId) - categories[categoryId].totalClaimed;
 
-        return vestedAmount - userVesting.claimed;
+        claimableAmount = vestedAmount - userVesting.claimed;
+        if (claimableAmount > emissionLeft) {
+            claimableAmount = emissionLeft;
+        }
     }
 
     /**
@@ -194,17 +206,18 @@ contract TfiVesting is Ownable {
      * @param claimAmount token amount to claim
      */
     function claim(address user, uint256 categoryId, uint256 vestingId, uint256 claimAmount) public {
-        if (claimAmount == 0) {
-            revert ZeroAmount();
-        }
-
         if (user != msg.sender && (!categories[categoryId].adminClaimable || msg.sender != owner())) {
             revert Forbidden(msg.sender);
         }
 
         uint256 claimableAmount = claimable(categoryId, vestingId, user);
-        if (claimAmount > claimableAmount) {
+        if (claimAmount == type(uint256).max) {
+            claimAmount = claimableAmount;
+        } else if (claimAmount > claimableAmount) {
             revert ClaimAmountExceed();
+        }
+        if (claimAmount == 0) {
+            revert ZeroAmount();
         }
 
         categories[categoryId].totalClaimed += claimAmount;
@@ -385,6 +398,9 @@ contract TfiVesting is Ownable {
         if (block.timestamp >= tgeTime) {
             revert VestingStarted(tgeTime);
         }
+        if (maxAllocation == 0) {
+            revert ZeroAmount();
+        }
 
         int256 tokenMove;
         if (id == type(uint256).max) {
@@ -408,6 +424,29 @@ contract TfiVesting is Ownable {
         }
 
         emit VestingCategorySet(id, category, maxAllocation, adminClaimable);
+    }
+
+    /**
+     * @notice Set emission schedule
+     * @dev Only admin can set emission schedule
+     * @param categoryId category id
+     * @param emissions Emission schedule
+     */
+    function setEmissionSchedule(uint256 categoryId, uint256[] memory emissions) public onlyOwner {
+        if (block.timestamp >= tgeTime) {
+            revert VestingStarted(tgeTime);
+        }
+
+        uint256 maxAllocation = categories[categoryId].maxAllocation;
+
+        if (emissions.length == 0 || emissions[emissions.length - 1] != maxAllocation) {
+            revert InvalidEmissions();
+        }
+
+        delete emissionSchedule[categoryId];
+        emissionSchedule[categoryId] = emissions;
+
+        emit EmissionScheduleSet(categoryId, emissions);
     }
 
     /**
@@ -502,6 +541,44 @@ contract TfiVesting is Ownable {
 
             unchecked {
                 i += 1;
+            }
+        }
+    }
+
+    /**
+     * @return emissions returns emission schedule of category
+     */
+    function getEmissionSchedule(uint256 categoryId) external view returns (uint256[] memory emissions) {
+        emissions = emissionSchedule[categoryId];
+    }
+
+    /**
+     * @return emissionLimit returns current emission limit of category
+     */
+    function getEmission(uint256 categoryId) public view returns (uint256 emissionLimit) {
+        uint64 _tgeTime = tgeTime;
+
+        if (block.timestamp >= _tgeTime) {
+            uint256 maxAllocation = categories[categoryId].maxAllocation;
+
+            if (emissionSchedule[categoryId].length == 0) {
+                return maxAllocation;
+            }
+            uint64 elapsedTime = uint64(block.timestamp) - _tgeTime;
+            uint64 elapsedMonth = elapsedTime / ONE_MONTH;
+
+            if (elapsedMonth >= emissionSchedule[categoryId].length) {
+                return maxAllocation;
+            }
+
+            uint256 lastMonthEmission = elapsedMonth == 0 ? 0 : emissionSchedule[categoryId][elapsedMonth - 1];
+            uint256 thisMonthEmission = emissionSchedule[categoryId][elapsedMonth];
+
+            uint64 elapsedTimeOfLastMonth = elapsedTime % ONE_MONTH;
+            emissionLimit =
+                (thisMonthEmission - lastMonthEmission) * elapsedTimeOfLastMonth / ONE_MONTH + lastMonthEmission;
+            if (emissionLimit > maxAllocation) {
+                emissionLimit = maxAllocation;
             }
         }
     }
