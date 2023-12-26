@@ -24,7 +24,7 @@ contract TfiBurn {
         oldTfi = IERC20(_oldTfi);
     }
 
-    function burnOldTfi(uint256 amount) public {
+    function burnOldTfi(uint256 amount) external {
         if (amount == 0) {
             revert ZeroAmount();
         }
