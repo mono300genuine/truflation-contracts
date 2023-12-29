@@ -28,12 +28,23 @@ contract TfiMigrator is Ownable2Step {
         tfiToken = IERC20(_tfiToken);
     }
 
+    /**
+     * Set merkle root
+     * @notice Only owner can call
+     * @param _merkleRoot Merkle root
+     */
     function setMerkleRoot(bytes32 _merkleRoot) external onlyOwner {
         merkleRoot = _merkleRoot;
 
         emit SetMerkleRoot(_merkleRoot);
     }
 
+    /**
+     * Claim new tfi token based on snapshot(merkle tree)
+     * @param index index of leaf
+     * @param amount token amount
+     * @param proof merkle proof
+     */
     function migrate(uint256 index, uint256 amount, bytes32[] calldata proof) external {
         bytes32 leaf = keccak256(abi.encode(msg.sender, index, amount));
 
@@ -55,6 +66,11 @@ contract TfiMigrator is Ownable2Step {
         emit Migrated(msg.sender, migrateAmount);
     }
 
+    /**
+     * Withdraw TFI tokens if we sent more tokens
+     * @notice Only owner can call
+     * @param amount Withdrawal amount
+     */
     function withdrawTfi(uint256 amount) external onlyOwner {
         tfiToken.safeTransfer(msg.sender, amount);
     }

@@ -24,6 +24,11 @@ contract TfiBurn {
         oldTfi = IERC20(_oldTfi);
     }
 
+    /**
+     * Burn Old TFI token
+     * @notice Transfer old tfi to burn address
+     * @param amount Burn amount
+     */
     function burnOldTfi(uint256 amount) external {
         if (amount == 0) {
             revert ZeroAmount();
