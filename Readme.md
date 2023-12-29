@@ -3,7 +3,7 @@
 ## Setup environment
 
 1. Create .env file from .env.example
-2. Set rpc urls, etherscan api key, and private key env envs.
+2. Set rpc urls, etherscan api key, and private key envs.
 
 ## Build
 
