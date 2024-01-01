@@ -9,7 +9,7 @@ import "../mock/MockERC677Receiver.sol";
 contract TruflationTokenTest is Test {
     event Transfer(address indexed from, address indexed to, uint256 value, bytes data);
 
-    TruflationToken public tfiToken;
+    TruflationToken public trufToken;
     MockERC677Receiver public erc677Receiver;
 
     // Users
@@ -17,12 +17,12 @@ contract TruflationTokenTest is Test {
     address public bob;
 
     string public name = "Truflation";
-    string public symbol = "TFI";
+    string public symbol = "TRUF";
     uint8 public decimals = 18;
     uint256 public totalSupply = 1_000_000_000e18;
 
     function setUp() public {
-        tfiToken = new TruflationToken();
+        trufToken = new TruflationToken();
 
         alice = address(uint160(uint256(keccak256(abi.encodePacked("Alice")))));
         bob = address(uint160(uint256(keccak256(abi.encodePacked("Bob")))));
@@ -32,15 +32,15 @@ contract TruflationTokenTest is Test {
 
         erc677Receiver = new MockERC677Receiver();
 
-        tfiToken.transfer(alice, 1e20);
+        trufToken.transfer(alice, 1e20);
     }
 
     function testConstructorSuccess() external {
         console.log("Check initial variables");
-        assertEq(tfiToken.name(), name, "Token name is invalid");
-        assertEq(tfiToken.symbol(), symbol, "Token symbol is invalid");
-        assertEq(tfiToken.decimals(), decimals, "Token decimals is invalid");
-        assertEq(tfiToken.totalSupply(), totalSupply, "Token supply is invalid");
+        assertEq(trufToken.name(), name, "Token name is invalid");
+        assertEq(trufToken.symbol(), symbol, "Token symbol is invalid");
+        assertEq(trufToken.decimals(), decimals, "Token decimals is invalid");
+        assertEq(trufToken.totalSupply(), totalSupply, "Token supply is invalid");
     }
 
     function testTransferAndCallToContract() external {
@@ -50,12 +50,12 @@ contract TruflationTokenTest is Test {
         bytes memory data = "0x1234";
 
         vm.startPrank(alice);
-        vm.expectEmit(true, true, true, true, address(tfiToken));
+        vm.expectEmit(true, true, true, true, address(trufToken));
         emit Transfer(alice, address(erc677Receiver), amount, data);
 
-        tfiToken.transferAndCall(address(erc677Receiver), amount, data);
+        trufToken.transferAndCall(address(erc677Receiver), amount, data);
 
-        assertEq(tfiToken.balanceOf(address(erc677Receiver)), amount, "Received balance is invalid");
+        assertEq(trufToken.balanceOf(address(erc677Receiver)), amount, "Received balance is invalid");
         assertEq(erc677Receiver.sender(), alice, "Sender is invalid");
         assertEq(erc677Receiver.value(), amount, "Value is invalid");
         assertEq(erc677Receiver.data(), data, "Data is invalid");
@@ -69,12 +69,12 @@ contract TruflationTokenTest is Test {
         bytes memory data = "0x1234";
 
         vm.startPrank(alice);
-        vm.expectEmit(true, true, true, true, address(tfiToken));
+        vm.expectEmit(true, true, true, true, address(trufToken));
         emit Transfer(alice, bob, amount, data);
 
-        tfiToken.transferAndCall(bob, amount, data);
+        trufToken.transferAndCall(bob, amount, data);
 
-        assertEq(tfiToken.balanceOf(address(bob)), amount, "Received balance is invalid");
+        assertEq(trufToken.balanceOf(address(bob)), amount, "Received balance is invalid");
         vm.stopPrank();
     }
 }

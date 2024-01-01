@@ -9,7 +9,7 @@ contract TruflationTokenCCIPTest is Test {
     event Transfer(address indexed from, address indexed to, uint256 value);
     event CcipPoolSet(address indexed ccipPool);
 
-    TruflationTokenCCIP public tfiToken;
+    TruflationTokenCCIP public trufToken;
 
     // Users
     address public owner;
@@ -17,7 +17,7 @@ contract TruflationTokenCCIPTest is Test {
     address public ccipPool;
 
     string public name = "Truflation";
-    string public symbol = "TFI";
+    string public symbol = "TRUF";
     uint8 public decimals = 18;
 
     function setUp() public {
@@ -30,18 +30,18 @@ contract TruflationTokenCCIPTest is Test {
         vm.label(ccipPool, "CcipPool");
 
         vm.startPrank(owner);
-        tfiToken = new TruflationTokenCCIP();
-        tfiToken.setCcipPool(ccipPool);
+        trufToken = new TruflationTokenCCIP();
+        trufToken.setCcipPool(ccipPool);
         vm.stopPrank();
     }
 
     function testConstructorSuccess() external {
         console.log("Check initial variables");
-        assertEq(tfiToken.name(), name, "Token name is invalid");
-        assertEq(tfiToken.symbol(), symbol, "Token symbol is invalid");
-        assertEq(tfiToken.decimals(), decimals, "Token decimals is invalid");
-        assertEq(tfiToken.totalSupply(), 0, "Token supply should be zero");
-        assertEq(tfiToken.owner(), owner, "Token owner is invalid");
+        assertEq(trufToken.name(), name, "Token name is invalid");
+        assertEq(trufToken.symbol(), symbol, "Token symbol is invalid");
+        assertEq(trufToken.decimals(), decimals, "Token decimals is invalid");
+        assertEq(trufToken.totalSupply(), 0, "Token supply should be zero");
+        assertEq(trufToken.owner(), owner, "Token owner is invalid");
     }
 
     function testSetCcipPool() external {
@@ -49,21 +49,21 @@ contract TruflationTokenCCIPTest is Test {
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
 
-        tfiToken.setCcipPool(alice);
+        trufToken.setCcipPool(alice);
         vm.stopPrank();
 
         vm.startPrank(owner);
         console.log("Should revert to set address(0) as ccip pool");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
 
-        tfiToken.setCcipPool(address(0));
+        trufToken.setCcipPool(address(0));
 
         console.log("Set new CCIP pool by owner");
 
-        vm.expectEmit(true, true, true, true, address(tfiToken));
+        vm.expectEmit(true, true, true, true, address(trufToken));
         emit CcipPoolSet(alice);
-        tfiToken.setCcipPool(alice);
-        assertEq(tfiToken.ccipPool(), alice, "CCIP pool was not set");
+        trufToken.setCcipPool(alice);
+        assertEq(trufToken.ccipPool(), alice, "CCIP pool was not set");
         vm.stopPrank();
     }
 
@@ -72,41 +72,41 @@ contract TruflationTokenCCIPTest is Test {
         vm.startPrank(alice);
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
 
-        tfiToken.mint(alice, 100);
+        trufToken.mint(alice, 100);
         vm.stopPrank();
 
         vm.startPrank(ccipPool);
         console.log("Mint new tokens by ccip pool");
 
-        vm.expectEmit(true, true, true, true, address(tfiToken));
+        vm.expectEmit(true, true, true, true, address(trufToken));
         emit Transfer(address(0), alice, 100);
-        tfiToken.mint(alice, 100);
+        trufToken.mint(alice, 100);
 
-        assertEq(tfiToken.balanceOf(alice), 100, "New tokens should be minted");
-        assertEq(tfiToken.totalSupply(), 100, "New tokens should be minted");
+        assertEq(trufToken.balanceOf(alice), 100, "New tokens should be minted");
+        assertEq(trufToken.totalSupply(), 100, "New tokens should be minted");
         vm.stopPrank();
     }
 
     function testBurn() external {
         vm.startPrank(ccipPool);
-        tfiToken.mint(ccipPool, 1000);
+        trufToken.mint(ccipPool, 1000);
         vm.stopPrank();
 
         console.log("Should revert to burn by non-ccipPool");
         vm.startPrank(alice);
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
 
-        tfiToken.burn(100);
+        trufToken.burn(100);
         vm.stopPrank();
 
         vm.startPrank(ccipPool);
         console.log("Burn by ccip pool");
 
-        vm.expectEmit(true, true, true, true, address(tfiToken));
+        vm.expectEmit(true, true, true, true, address(trufToken));
         emit Transfer(ccipPool, address(0), 100);
-        tfiToken.burn(100);
+        trufToken.burn(100);
 
-        assertEq(tfiToken.balanceOf(ccipPool), 900, "Tokens should be burned");
+        assertEq(trufToken.balanceOf(ccipPool), 900, "Tokens should be burned");
         vm.stopPrank();
     }
 }

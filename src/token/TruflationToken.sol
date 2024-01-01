@@ -8,11 +8,11 @@ import "./ERC677Token.sol";
  * @author Ryuhei Matsuda
  * @notice ERC677 Token like LINK token
  *      name: Truflation
- *      symbol: TFI
- *      total supply: 100,000,000 TFI
+ *      symbol: TRUF
+ *      total supply: 100,000,000 TRUF
  */
 contract TruflationToken is ERC677Token {
-    constructor() ERC20("Truflation", "TFI") {
+    constructor() ERC20("Truflation", "TRUF") {
         _mint(msg.sender, 1_000_000_000e18);
     }
 }

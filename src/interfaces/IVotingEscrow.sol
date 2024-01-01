@@ -7,7 +7,7 @@ interface IVotingEscrow {
         uint128 amount; // Locked amount
         uint128 duration; // Lock duration in seconds
         uint128 end; // Lock end timestamp in seconds
-        uint256 points; // veTFI points
+        uint256 points; // veTRUF points
         bool isVesting; // True if locked from vesting
     }
 
@@ -22,7 +22,7 @@ interface IVotingEscrow {
     function extendVestingLock(address user, uint256 lockupId, uint256 duration) external;
 
     // Events
-    /// Emitted when user staked TFI or vesting
+    /// Emitted when user staked TRUF or vesting
     event Stake(
         address indexed user, bool indexed isVesting, uint256 lockupId, uint256 amount, uint256 end, uint256 points
     );

@@ -4,11 +4,11 @@ pragma solidity 0.8.19;
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 import "../../src/token/TruflationToken.sol";
-import "../../src/token/TfiVesting.sol";
-import "../../src/token/VotingEscrowTfi.sol";
+import "../../src/token/TrufVesting.sol";
+import "../../src/token/VotingEscrowTruf.sol";
 import "../../src/staking/VirtualStakingRewards.sol";
 
-contract VotingEscrowTfiTest is Test {
+contract VotingEscrowTrufTest is Test {
     event Stake(
         address indexed user, bool indexed isVesting, uint256 lockupId, uint256 amount, uint256 end, uint256 points
     );
@@ -18,13 +18,13 @@ contract VotingEscrowTfiTest is Test {
     event Migrated(address indexed oldUser, address indexed newUser, uint256 oldLockupId, uint256 newLockupId);
     event Cancelled(address indexed user, uint256 lockupId, uint256 amount, uint256 points);
 
-    TruflationToken public tfiToken;
-    VotingEscrowTfi public veTFI;
-    VirtualStakingRewards public tfiStakingRewards;
+    TruflationToken public trufToken;
+    VotingEscrowTruf public veTRUF;
+    VirtualStakingRewards public trufStakingRewards;
 
     // Config
-    string public name = "Voting Escrowed TFI";
-    string public symbol = "veTFI";
+    string public name = "Voting Escrowed TRUF";
+    string public symbol = "veTRUF";
 
     uint256 public minStakeDuration = 1 hours;
     uint256 public constant YEAR_BASE = 18e17;
@@ -51,35 +51,36 @@ contract VotingEscrowTfiTest is Test {
         vm.warp(1696816730);
 
         vm.startPrank(owner);
-        tfiToken = new TruflationToken();
-        tfiToken.transfer(alice, tfiToken.totalSupply() / 3);
-        tfiToken.transfer(vesting, tfiToken.totalSupply() / 3);
-        tfiStakingRewards = new VirtualStakingRewards(owner, address(tfiToken));
-        veTFI = new VotingEscrowTfi(address(tfiToken), address(vesting), minStakeDuration, address(tfiStakingRewards));
-        tfiStakingRewards.setOperator(address(veTFI));
-        tfiToken.transfer(address(tfiStakingRewards), 200e18);
-        tfiStakingRewards.notifyRewardAmount(200e18);
+        trufToken = new TruflationToken();
+        trufToken.transfer(alice, trufToken.totalSupply() / 3);
+        trufToken.transfer(vesting, trufToken.totalSupply() / 3);
+        trufStakingRewards = new VirtualStakingRewards(owner, address(trufToken));
+        veTRUF =
+            new VotingEscrowTruf(address(trufToken), address(vesting), minStakeDuration, address(trufStakingRewards));
+        trufStakingRewards.setOperator(address(veTRUF));
+        trufToken.transfer(address(trufStakingRewards), 200e18);
+        trufStakingRewards.notifyRewardAmount(200e18);
 
         vm.stopPrank();
 
         vm.startPrank(alice);
-        tfiToken.approve(address(veTFI), type(uint256).max);
+        trufToken.approve(address(veTRUF), type(uint256).max);
         vm.stopPrank();
 
         vm.startPrank(vesting);
-        tfiToken.approve(address(veTFI), type(uint256).max);
+        trufToken.approve(address(veTRUF), type(uint256).max);
         vm.stopPrank();
     }
 
     function testConstructorSuccess() external {
         console.log("Check initial variables");
-        assertEq(address(veTFI.tfiToken()), address(tfiToken), "Tfi Token is invalid");
-        assertEq(veTFI.tfiVesting(), vesting, "Vesting is invalid");
-        assertEq(veTFI.minStakeDuration(), minStakeDuration, "minStakeDuration is invalid");
-        assertEq(address(veTFI.stakingRewards()), address(tfiStakingRewards), "StakingRewards is invalid");
-        assertEq(veTFI.name(), name, "Name is invalid");
-        assertEq(veTFI.symbol(), symbol, "Symbol is invalid");
-        assertEq(veTFI.decimals(), 18, "Decimal is invalid");
+        assertEq(address(veTRUF.trufToken()), address(trufToken), "TRUF Token is invalid");
+        assertEq(veTRUF.trufVesting(), vesting, "Vesting is invalid");
+        assertEq(veTRUF.minStakeDuration(), minStakeDuration, "minStakeDuration is invalid");
+        assertEq(address(veTRUF.stakingRewards()), address(trufStakingRewards), "StakingRewards is invalid");
+        assertEq(veTRUF.name(), name, "Name is invalid");
+        assertEq(veTRUF.symbol(), symbol, "Symbol is invalid");
+        assertEq(veTRUF.decimals(), 18, "Decimal is invalid");
     }
 
     function testTransfer_RevertAnytmie() external {
@@ -87,11 +88,11 @@ contract VotingEscrowTfiTest is Test {
 
         _stake(100e18, 30 days, alice, alice);
 
-        assertNotEq(veTFI.balanceOf(alice), 0, "Alice does not have veTFI");
+        assertNotEq(veTRUF.balanceOf(alice), 0, "Alice does not have veTRUF");
 
         vm.startPrank(alice);
         vm.expectRevert(abi.encodeWithSignature("TransferDisabled()"));
-        veTFI.transfer(bob, 1);
+        veTRUF.transfer(bob, 1);
 
         vm.stopPrank();
     }
@@ -102,23 +103,23 @@ contract VotingEscrowTfiTest is Test {
         uint256 amount = 100e18;
         uint256 duration = 30 days;
 
-        (uint256 points, uint256 ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.startPrank(alice);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Stake(bob, false, 0, amount, ends, points);
 
-        veTFI.stake(amount, duration, bob);
+        veTRUF.stake(amount, duration, bob);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(alice), 0, "Alice should not have balance");
-        assertEq(veTFI.balanceOf(bob), points, "Bob should have balance");
-        assertEq(tfiStakingRewards.balanceOf(bob), points, "Bob should have staking balance");
-        assertEq(tfiToken.balanceOf(address(veTFI)), amount, "TFI token should be transferred");
-        assertEq(veTFI.delegates(bob), bob, "Delegate is invalid");
+        assertEq(veTRUF.balanceOf(alice), 0, "Alice should not have balance");
+        assertEq(veTRUF.balanceOf(bob), points, "Bob should have balance");
+        assertEq(trufStakingRewards.balanceOf(bob), points, "Bob should have staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), amount, "TRUF token should be transferred");
+        assertEq(veTRUF.delegates(bob), bob, "Delegate is invalid");
 
         _validateLockup(bob, 0, amount, duration, ends, points, false);
     }
@@ -131,24 +132,24 @@ contract VotingEscrowTfiTest is Test {
         uint256 amount = 1000e18;
         uint256 duration = 60 days;
 
-        uint256 prevBalance = veTFI.balanceOf(bob);
+        uint256 prevBalance = veTRUF.balanceOf(bob);
 
-        (uint256 points, uint256 ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.startPrank(alice);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Stake(bob, false, 1, amount, ends, points);
 
-        veTFI.stake(amount, duration, bob);
+        veTRUF.stake(amount, duration, bob);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(bob), prevBalance + points, "Bob should have balance");
-        assertEq(tfiStakingRewards.balanceOf(bob), prevBalance + points, "Bob should have staking balance");
-        assertEq(tfiToken.balanceOf(address(veTFI)), amount + 100e18, "TFI token should be transferred");
-        assertEq(veTFI.delegates(bob), bob, "Delegate is invalid");
+        assertEq(veTRUF.balanceOf(bob), prevBalance + points, "Bob should have balance");
+        assertEq(trufStakingRewards.balanceOf(bob), prevBalance + points, "Bob should have staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), amount + 100e18, "TRUF token should be transferred");
+        assertEq(veTRUF.delegates(bob), bob, "Delegate is invalid");
 
         _validateLockup(bob, 1, amount, duration, ends, points, false);
     }
@@ -158,13 +159,13 @@ contract VotingEscrowTfiTest is Test {
 
         vm.startPrank(alice);
 
-        veTFI.delegate(bob);
+        veTRUF.delegate(bob);
 
         vm.stopPrank();
 
         _stake(100e18, 30 days, alice, alice);
 
-        assertEq(veTFI.delegates(alice), bob, "Delegate is invalid");
+        assertEq(veTRUF.delegates(alice), bob, "Delegate is invalid");
     }
 
     function testStakeFailure() external {
@@ -172,15 +173,15 @@ contract VotingEscrowTfiTest is Test {
 
         console.log("Revert if amount is 0");
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
-        veTFI.stake(0, 30 days, bob);
+        veTRUF.stake(0, 30 days, bob);
 
         console.log("Revert if to is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        veTFI.stake(100e18, 30 days, address(0));
+        veTRUF.stake(100e18, 30 days, address(0));
 
         console.log("Revert if amount is greater than uint128.max");
         vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
-        veTFI.stake(uint256(type(uint128).max) + 1, 30 days, bob);
+        veTRUF.stake(uint256(type(uint128).max) + 1, 30 days, bob);
 
         vm.stopPrank();
     }
@@ -191,23 +192,23 @@ contract VotingEscrowTfiTest is Test {
         uint256 amount = 100e18;
         uint256 duration = 30 days;
 
-        (uint256 points, uint256 ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.startPrank(vesting);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Stake(bob, true, 0, amount, ends, points);
 
-        assertEq(veTFI.stakeVesting(amount, duration, bob), 0, "Lockup id is invalid");
+        assertEq(veTRUF.stakeVesting(amount, duration, bob), 0, "Lockup id is invalid");
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(alice), 0, "Alice should not have balance");
-        assertEq(veTFI.balanceOf(bob), points, "Bob should have balance");
-        assertEq(tfiStakingRewards.balanceOf(bob), points, "Bob should have staking balance");
-        assertEq(tfiToken.balanceOf(address(veTFI)), amount, "TFI token should be transferred");
-        assertEq(veTFI.delegates(bob), bob, "Delegate is invalid");
+        assertEq(veTRUF.balanceOf(alice), 0, "Alice should not have balance");
+        assertEq(veTRUF.balanceOf(bob), points, "Bob should have balance");
+        assertEq(trufStakingRewards.balanceOf(bob), points, "Bob should have staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), amount, "TRUF token should be transferred");
+        assertEq(veTRUF.delegates(bob), bob, "Delegate is invalid");
 
         _validateLockup(bob, 0, amount, duration, ends, points, true);
     }
@@ -217,7 +218,7 @@ contract VotingEscrowTfiTest is Test {
 
         console.log("Revert if msg.sender is not vesting");
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-        veTFI.stakeVesting(100e18, 30 days, vesting);
+        veTRUF.stakeVesting(100e18, 30 days, vesting);
 
         vm.stopPrank();
 
@@ -225,7 +226,7 @@ contract VotingEscrowTfiTest is Test {
 
         console.log("Revert if to is vesting");
         vm.expectRevert(abi.encodeWithSignature("InvalidAccount()"));
-        veTFI.stakeVesting(100e18, 30 days, vesting);
+        veTRUF.stakeVesting(100e18, 30 days, vesting);
 
         vm.stopPrank();
     }
@@ -238,24 +239,24 @@ contract VotingEscrowTfiTest is Test {
 
         _stake(amount, duration, alice, bob);
 
-        (uint256 points, uint256 ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.warp(ends);
 
         vm.startPrank(bob);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Unstake(bob, false, 0, amount, ends, points);
 
-        veTFI.unstake(0);
+        veTRUF.unstake(0);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(bob), 0, "Bob should have no balance");
-        assertEq(tfiStakingRewards.balanceOf(bob), 0, "Bob should have no staking balance");
-        assertEq(tfiToken.balanceOf(address(veTFI)), 0, "TFI token should be transferred from veTFI");
-        assertEq(tfiToken.balanceOf(bob), amount, "TFI token should be transferred to bob");
+        assertEq(veTRUF.balanceOf(bob), 0, "Bob should have no balance");
+        assertEq(trufStakingRewards.balanceOf(bob), 0, "Bob should have no staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), 0, "TRUF token should be transferred from veTRUF");
+        assertEq(trufToken.balanceOf(bob), amount, "TRUF token should be transferred to bob");
 
         _validateLockup(bob, 0, 0, 0, 0, 0, false);
     }
@@ -266,7 +267,7 @@ contract VotingEscrowTfiTest is Test {
 
         _stake(amount, duration, alice, bob);
 
-        (uint256 points, uint256 ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         console.log("Revert to unstake if trying to unstake as vesting");
@@ -274,7 +275,7 @@ contract VotingEscrowTfiTest is Test {
         vm.startPrank(vesting);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTFI.unstakeVesting(bob, 0, false);
+        veTRUF.unstakeVesting(bob, 0, false);
 
         vm.stopPrank();
 
@@ -284,15 +285,15 @@ contract VotingEscrowTfiTest is Test {
 
         vm.warp(block.timestamp + 10 days);
         vm.expectRevert(abi.encodeWithSignature("LockupNotEnded()"));
-        veTFI.unstake(0);
+        veTRUF.unstake(0);
 
         console.log("Revert to unstake if already unstaked");
 
         vm.warp(ends);
-        veTFI.unstake(0);
+        veTRUF.unstake(0);
 
         vm.expectRevert(abi.encodeWithSignature("LockupAlreadyUnstaked()"));
-        veTFI.unstake(0);
+        veTRUF.unstake(0);
 
         vm.stopPrank();
     }
@@ -305,26 +306,26 @@ contract VotingEscrowTfiTest is Test {
 
         _stakeVesting(amount, duration, bob);
 
-        uint256 prevVestingBal = tfiToken.balanceOf(vesting);
+        uint256 prevVestingBal = trufToken.balanceOf(vesting);
 
-        (uint256 points, uint256 ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.warp(ends);
 
         vm.startPrank(vesting);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Unstake(bob, true, 0, amount, ends, points);
 
-        veTFI.unstakeVesting(bob, 0, false);
+        veTRUF.unstakeVesting(bob, 0, false);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(bob), 0, "Bob should have no balance");
-        assertEq(tfiStakingRewards.balanceOf(bob), 0, "Bob should have no staking balance");
-        assertEq(tfiToken.balanceOf(address(veTFI)), 0, "TFI token should be transferred from veTFI");
-        assertEq(tfiToken.balanceOf(vesting), prevVestingBal + amount, "TFI token should be transferred to vesting");
+        assertEq(veTRUF.balanceOf(bob), 0, "Bob should have no balance");
+        assertEq(trufStakingRewards.balanceOf(bob), 0, "Bob should have no staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), 0, "TRUF token should be transferred from veTRUF");
+        assertEq(trufToken.balanceOf(vesting), prevVestingBal + amount, "TRUF token should be transferred to vesting");
 
         _validateLockup(bob, 0, 0, 0, 0, 0, false);
     }
@@ -337,26 +338,26 @@ contract VotingEscrowTfiTest is Test {
 
         _stakeVesting(amount, duration, bob);
 
-        uint256 prevVestingBal = tfiToken.balanceOf(vesting);
+        uint256 prevVestingBal = trufToken.balanceOf(vesting);
 
-        (uint256 points,) = veTFI.previewPoints(amount, duration);
+        (uint256 points,) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.warp(block.timestamp + 10 days);
 
         vm.startPrank(vesting);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Cancelled(bob, 0, amount, points);
 
-        veTFI.unstakeVesting(bob, 0, true);
+        veTRUF.unstakeVesting(bob, 0, true);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(bob), 0, "Bob should have no balance");
-        assertEq(tfiStakingRewards.balanceOf(bob), 0, "Bob should have no staking balance");
-        assertEq(tfiToken.balanceOf(address(veTFI)), 0, "TFI token should be transferred from veTFI");
-        assertEq(tfiToken.balanceOf(vesting), prevVestingBal + amount, "TFI token should be transferred to vesting");
+        assertEq(veTRUF.balanceOf(bob), 0, "Bob should have no balance");
+        assertEq(trufStakingRewards.balanceOf(bob), 0, "Bob should have no staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), 0, "TRUF token should be transferred from veTRUF");
+        assertEq(trufToken.balanceOf(vesting), prevVestingBal + amount, "TRUF token should be transferred to vesting");
 
         _validateLockup(bob, 0, 0, 0, 0, 0, false);
     }
@@ -372,11 +373,11 @@ contract VotingEscrowTfiTest is Test {
         vm.startPrank(bob);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTFI.unstake(0);
+        veTRUF.unstake(0);
 
         console.log("Revert if msg.sender is not vesting");
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", bob));
-        veTFI.unstakeVesting(bob, 0, false);
+        veTRUF.unstakeVesting(bob, 0, false);
 
         vm.stopPrank();
     }
@@ -393,24 +394,24 @@ contract VotingEscrowTfiTest is Test {
 
         uint256 extendDuration = 60 days;
 
-        (,, uint128 _ends,,) = veTFI.lockups(alice, 0);
+        (,, uint128 _ends,,) = veTRUF.lockups(alice, 0);
 
         uint256 newEnds = _ends + extendDuration;
 
-        (uint256 newPoints,) = veTFI.previewPoints(amount, duration + extendDuration);
+        (uint256 newPoints,) = veTRUF.previewPoints(amount, duration + extendDuration);
         assertNotEq(newPoints, 0, "Points should be non-zero");
 
         vm.startPrank(alice);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Stake(alice, false, 0, amount, newEnds, newPoints);
 
-        veTFI.extendLock(0, extendDuration);
+        veTRUF.extendLock(0, extendDuration);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(alice), newPoints, "Mint increased points to alice");
-        assertEq(tfiStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
+        assertEq(veTRUF.balanceOf(alice), newPoints, "Mint increased points to alice");
+        assertEq(trufStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
 
         _validateLockup(alice, 0, amount, duration + extendDuration, newEnds, newPoints, false);
     }
@@ -421,7 +422,7 @@ contract VotingEscrowTfiTest is Test {
 
         _stake(amount, duration, alice, alice);
 
-        (uint256 points,) = veTFI.previewPoints(amount, duration);
+        (uint256 points,) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         uint256 extendDuration = 60 days;
@@ -433,7 +434,7 @@ contract VotingEscrowTfiTest is Test {
         vm.startPrank(vesting);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTFI.extendVestingLock(alice, 0, extendDuration);
+        veTRUF.extendVestingLock(alice, 0, extendDuration);
 
         vm.stopPrank();
     }
@@ -446,7 +447,7 @@ contract VotingEscrowTfiTest is Test {
 
         _stakeVesting(amount, duration, alice);
 
-        (,, uint128 _ends,,) = veTFI.lockups(alice, 0);
+        (,, uint128 _ends,,) = veTRUF.lockups(alice, 0);
 
         vm.warp(block.timestamp + 10 days);
 
@@ -455,20 +456,20 @@ contract VotingEscrowTfiTest is Test {
         uint256 newEnds = _ends + extendDuration;
         uint256 newDuration = duration + extendDuration;
 
-        (uint256 newPoints,) = veTFI.previewPoints(amount, newDuration);
+        (uint256 newPoints,) = veTRUF.previewPoints(amount, newDuration);
         assertNotEq(newPoints, 0, "Points should be non-zero");
 
         vm.startPrank(vesting);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Stake(alice, true, 0, amount, newEnds, newPoints);
 
-        veTFI.extendVestingLock(alice, 0, extendDuration);
+        veTRUF.extendVestingLock(alice, 0, extendDuration);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(alice), newPoints, "Mint increased points to alice");
-        assertEq(tfiStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
+        assertEq(veTRUF.balanceOf(alice), newPoints, "Mint increased points to alice");
+        assertEq(trufStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
 
         _validateLockup(alice, 0, amount, duration + extendDuration, newEnds, newPoints, true);
     }
@@ -486,11 +487,11 @@ contract VotingEscrowTfiTest is Test {
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTFI.extendLock(0, duration);
+        veTRUF.extendLock(0, duration);
 
         console.log("Revert if msg.sender is not vesting");
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-        veTFI.extendVestingLock(alice, 0, duration);
+        veTRUF.extendVestingLock(alice, 0, duration);
 
         vm.stopPrank();
     }
@@ -507,24 +508,24 @@ contract VotingEscrowTfiTest is Test {
         _stake(aliceAmount, aliceDuration, alice, alice);
         _stakeVesting(amount, duration, alice);
 
-        (uint256 alicePoints,) = veTFI.previewPoints(aliceAmount, aliceDuration);
+        (uint256 alicePoints,) = veTRUF.previewPoints(aliceAmount, aliceDuration);
 
-        (uint256 points, uint256 ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.startPrank(vesting);
 
-        vm.expectEmit(true, true, true, true, address(veTFI));
+        vm.expectEmit(true, true, true, true, address(veTRUF));
         emit Migrated(alice, bob, 1, 0);
 
-        veTFI.migrateVestingLock(alice, bob, 1);
+        veTRUF.migrateVestingLock(alice, bob, 1);
 
         vm.stopPrank();
 
-        assertEq(veTFI.balanceOf(alice), alicePoints, "Points should be burned");
-        assertEq(tfiStakingRewards.balanceOf(alice), alicePoints, "Stake amount should be reduced");
-        assertEq(veTFI.balanceOf(bob), points, "Points should be minted to new user");
-        assertEq(tfiStakingRewards.balanceOf(bob), points, "Stake amount should be moved to new user");
+        assertEq(veTRUF.balanceOf(alice), alicePoints, "Points should be burned");
+        assertEq(trufStakingRewards.balanceOf(alice), alicePoints, "Stake amount should be reduced");
+        assertEq(veTRUF.balanceOf(bob), points, "Points should be minted to new user");
+        assertEq(trufStakingRewards.balanceOf(bob), points, "Stake amount should be moved to new user");
 
         _validateLockup(alice, 1, 0, 0, 0, 0, false);
         _validateLockup(bob, 0, amount, duration, ends, points, true);
@@ -538,7 +539,7 @@ contract VotingEscrowTfiTest is Test {
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-        veTFI.migrateVestingLock(alice, bob, 0);
+        veTRUF.migrateVestingLock(alice, bob, 0);
 
         vm.stopPrank();
 
@@ -546,15 +547,15 @@ contract VotingEscrowTfiTest is Test {
 
         console.log("Revert if old user and new user is same");
         vm.expectRevert(abi.encodeWithSignature("NotMigrate()"));
-        veTFI.migrateVestingLock(alice, alice, 0);
+        veTRUF.migrateVestingLock(alice, alice, 0);
 
         console.log("Revert if new user is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        veTFI.migrateVestingLock(alice, address(0), 0);
+        veTRUF.migrateVestingLock(alice, address(0), 0);
 
         console.log("Revert to migrate non-vesting lockup");
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTFI.migrateVestingLock(alice, bob, 1);
+        veTRUF.migrateVestingLock(alice, bob, 1);
 
         vm.stopPrank();
     }
@@ -569,32 +570,32 @@ contract VotingEscrowTfiTest is Test {
 
         vm.warp(block.timestamp + 10 days);
 
-        uint256 earned = tfiStakingRewards.earned(bob);
+        uint256 earned = trufStakingRewards.earned(bob);
         assertNotEq(earned, 0, "Earned reward should be non-zero");
 
         vm.startPrank(bob);
 
-        veTFI.claimReward();
+        veTRUF.claimReward();
 
         vm.stopPrank();
 
-        assertEq(tfiStakingRewards.earned(bob), 0, "Earned reward should be zero");
-        assertEq(tfiToken.balanceOf(bob), earned, "Bob should receive reward");
+        assertEq(trufStakingRewards.earned(bob), 0, "Earned reward should be zero");
+        assertEq(trufToken.balanceOf(bob), earned, "Bob should receive reward");
     }
 
     function testPreviewPoints() external {
         console.log("Revert if duration is too short");
         vm.expectRevert(abi.encodeWithSignature("TooShort()"));
-        veTFI.previewPoints(100e18, 1 hours - 1);
+        veTRUF.previewPoints(100e18, 1 hours - 1);
 
         console.log("Revert if duration is too long");
         vm.expectRevert(abi.encodeWithSignature("TooLong()"));
-        veTFI.previewPoints(100e18, 365 days * 3 + 1);
+        veTRUF.previewPoints(100e18, 365 days * 3 + 1);
 
         console.log("Return valid points and ends");
         uint256 duration = 60 days;
         uint256 amount = 100e18;
-        (uint256 points, uint256 _ends) = veTFI.previewPoints(amount, duration);
+        (uint256 points, uint256 _ends) = veTRUF.previewPoints(amount, duration);
         assertEq(_ends, block.timestamp + duration, "Invalid ends");
         assertEq(points, (amount * duration) / (365 days * 3), "Invalid points");
     }
@@ -602,7 +603,7 @@ contract VotingEscrowTfiTest is Test {
     function _stake(uint256 amount, uint256 duration, address from, address to) internal {
         vm.startPrank(from);
 
-        veTFI.stake(amount, duration, to);
+        veTRUF.stake(amount, duration, to);
 
         vm.stopPrank();
     }
@@ -610,7 +611,7 @@ contract VotingEscrowTfiTest is Test {
     function _stakeVesting(uint256 amount, uint256 duration, address to) internal {
         vm.startPrank(vesting);
 
-        veTFI.stakeVesting(amount, duration, to);
+        veTRUF.stakeVesting(amount, duration, to);
 
         vm.stopPrank();
     }
@@ -624,7 +625,8 @@ contract VotingEscrowTfiTest is Test {
         uint256 points,
         bool isVesting
     ) internal {
-        (uint128 _amount, uint128 _duration, uint128 _ends, uint256 _points, bool _isVesting) = veTFI.lockups(user, idx);
+        (uint128 _amount, uint128 _duration, uint128 _ends, uint256 _points, bool _isVesting) =
+            veTRUF.lockups(user, idx);
 
         assertEq(amount, uint256(_amount), "Amount is invalid");
         assertEq(duration, uint256(_duration), "Duration is invalid");

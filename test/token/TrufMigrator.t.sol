@@ -6,15 +6,15 @@ import "forge-std/Test.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "murky/src/Merkle.sol";
 import "../../src/token/TruflationToken.sol";
-import "../../src/token/TfiMigrator.sol";
+import "../../src/token/TrufMigrator.sol";
 
-contract TfiMigratorTest is Test, Merkle {
+contract TrufMigratorTest is Test, Merkle {
     event Transfer(address indexed from, address indexed to, uint256 value);
     event SetMerkleRoot(bytes32 merkleRoot);
     event Migrated(address indexed user, uint256 amount);
 
-    TruflationToken public tfiToken;
-    TfiMigrator public tfiMigrator;
+    TruflationToken public trufToken;
+    TrufMigrator public trufMigrator;
 
     // Users
     address public alice;
@@ -28,32 +28,32 @@ contract TfiMigratorTest is Test, Merkle {
         vm.label(owner, "Owner");
 
         vm.startPrank(owner);
-        tfiToken = new TruflationToken();
-        tfiMigrator = new TfiMigrator(address(tfiToken));
+        trufToken = new TruflationToken();
+        trufMigrator = new TrufMigrator(address(trufToken));
 
-        tfiToken.transfer(address(tfiMigrator), 1e24);
+        trufToken.transfer(address(trufMigrator), 1e24);
 
         vm.stopPrank();
     }
 
     function testConstructorSuccess() external {
         console.log("Check initial variables");
-        assertEq(address(tfiMigrator.tfiToken()), address(tfiToken), "Tfi token is invalid");
-        assertEq(tfiMigrator.owner(), owner, "Owner is invalid");
+        assertEq(address(trufMigrator.trufToken()), address(trufToken), "TRUF token is invalid");
+        assertEq(trufMigrator.owner(), owner, "Owner is invalid");
     }
 
     function testSetMerkleRoot() external {
         bytes32 fakeMerkleRoot = keccak256("Fake Merkle Root");
 
         vm.startPrank(owner);
-        vm.expectEmit(true, true, true, true, address(tfiMigrator));
+        vm.expectEmit(true, true, true, true, address(trufMigrator));
         emit SetMerkleRoot(fakeMerkleRoot);
 
-        tfiMigrator.setMerkleRoot(fakeMerkleRoot);
+        trufMigrator.setMerkleRoot(fakeMerkleRoot);
 
         vm.stopPrank();
 
-        assertEq(tfiMigrator.merkleRoot(), fakeMerkleRoot, "Merkle root is invalid");
+        assertEq(trufMigrator.merkleRoot(), fakeMerkleRoot, "Merkle root is invalid");
     }
 
     function testSetMerkleRootFailures() external {
@@ -64,7 +64,7 @@ contract TfiMigratorTest is Test, Merkle {
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
 
-        tfiMigrator.setMerkleRoot(fakeMerkleRoot);
+        trufMigrator.setMerkleRoot(fakeMerkleRoot);
 
         vm.stopPrank();
     }
@@ -77,15 +77,15 @@ contract TfiMigratorTest is Test, Merkle {
         uint256 amount = amounts[index];
 
         vm.startPrank(user);
-        vm.expectEmit(true, true, true, true, address(tfiMigrator));
+        vm.expectEmit(true, true, true, true, address(trufMigrator));
         emit Migrated(user, amount);
 
-        tfiMigrator.migrate(index, amount, getProof(leaves, index));
+        trufMigrator.migrate(index, amount, getProof(leaves, index));
 
         vm.stopPrank();
 
-        assertEq(tfiMigrator.migratedAmount(user), amount, "Migrated amount is invalid");
-        assertEq(tfiToken.balanceOf(user), amount, "User did not receive TFI token");
+        assertEq(trufMigrator.migratedAmount(user), amount, "Migrated amount is invalid");
+        assertEq(trufToken.balanceOf(user), amount, "User did not receive TRUF token");
     }
 
     function testMigrate_More() external {
@@ -101,7 +101,7 @@ contract TfiMigratorTest is Test, Merkle {
 
         vm.startPrank(user);
 
-        tfiMigrator.migrate(index, amount, getProof(leaves, index));
+        trufMigrator.migrate(index, amount, getProof(leaves, index));
 
         vm.stopPrank();
 
@@ -111,20 +111,20 @@ contract TfiMigratorTest is Test, Merkle {
 
         vm.startPrank(owner);
 
-        tfiMigrator.setMerkleRoot(merkleRoot);
+        trufMigrator.setMerkleRoot(merkleRoot);
 
         vm.stopPrank();
 
         vm.startPrank(user);
-        vm.expectEmit(true, true, true, true, address(tfiMigrator));
+        vm.expectEmit(true, true, true, true, address(trufMigrator));
         emit Migrated(user, addedAmount);
 
-        tfiMigrator.migrate(index, amounts[index], getProof(newLeaves, index));
+        trufMigrator.migrate(index, amounts[index], getProof(newLeaves, index));
 
         vm.stopPrank();
 
-        assertEq(tfiMigrator.migratedAmount(user), amounts[index], "Migrated amount is invalid");
-        assertEq(tfiToken.balanceOf(user), amounts[index], "User did not receive TFI token");
+        assertEq(trufMigrator.migratedAmount(user), amounts[index], "Migrated amount is invalid");
+        assertEq(trufToken.balanceOf(user), amounts[index], "User did not receive TRUF token");
     }
 
     function testMigrateFailures() external {
@@ -139,37 +139,37 @@ contract TfiMigratorTest is Test, Merkle {
         console.log("Revert if proof is invalid");
         vm.expectRevert(abi.encodeWithSignature("InvalidProof()"));
 
-        tfiMigrator.migrate(index, amount, getProof(leaves, index + 1));
+        trufMigrator.migrate(index, amount, getProof(leaves, index + 1));
 
         console.log("Revert if already migrated");
-        tfiMigrator.migrate(index, amount, getProof(leaves, index));
+        trufMigrator.migrate(index, amount, getProof(leaves, index));
 
         vm.expectRevert(abi.encodeWithSignature("AlreadyMigrated()"));
 
-        tfiMigrator.migrate(index, amount, getProof(leaves, index));
+        trufMigrator.migrate(index, amount, getProof(leaves, index));
 
         vm.stopPrank();
     }
 
-    function testWithdrawTfi() external {
+    function testWithdrawTruf() external {
         uint256 amount = 1e18;
 
         vm.startPrank(owner);
 
-        vm.expectEmit(true, true, true, true, address(tfiToken));
-        emit Transfer(address(tfiMigrator), owner, amount);
-        tfiMigrator.withdrawTfi(amount);
+        vm.expectEmit(true, true, true, true, address(trufToken));
+        emit Transfer(address(trufMigrator), owner, amount);
+        trufMigrator.withdrawTruf(amount);
 
         vm.stopPrank();
     }
 
-    function testWithdrawTfiFailures() external {
+    function testWithdrawTrufFailures() external {
         console.log("Revert if msg.sender is not owner");
 
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
 
-        tfiMigrator.withdrawTfi(100);
+        trufMigrator.withdrawTruf(100);
 
         vm.stopPrank();
     }
@@ -183,7 +183,7 @@ contract TfiMigratorTest is Test, Merkle {
 
         vm.startPrank(owner);
 
-        tfiMigrator.setMerkleRoot(merkleRoot);
+        trufMigrator.setMerkleRoot(merkleRoot);
 
         vm.stopPrank();
     }

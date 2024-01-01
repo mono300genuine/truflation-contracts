@@ -4,12 +4,12 @@ pragma solidity 0.8.19;
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 import "../../src/token/TruflationToken.sol";
-import "../../src/token/VotingEscrowTfi.sol";
+import "../../src/token/VotingEscrowTruf.sol";
 import "../../src/staking/VirtualStakingRewards.sol";
 
 contract VirtualStakingRewardsTest is Test {
-    TruflationToken public tfiToken;
-    VirtualStakingRewards public tfiStakingRewards;
+    TruflationToken public trufToken;
+    VirtualStakingRewards public trufStakingRewards;
 
     // Users
     address public alice;
@@ -34,20 +34,20 @@ contract VirtualStakingRewardsTest is Test {
         vm.warp(1696816730);
 
         vm.startPrank(owner);
-        tfiToken = new TruflationToken();
-        tfiStakingRewards = new VirtualStakingRewards(rewardsDistribuion, address(tfiToken));
-        tfiStakingRewards.setOperator(operator);
-        tfiToken.transfer(rewardsDistribuion, tfiToken.totalSupply());
+        trufToken = new TruflationToken();
+        trufStakingRewards = new VirtualStakingRewards(rewardsDistribuion, address(trufToken));
+        trufStakingRewards.setOperator(operator);
+        trufToken.transfer(rewardsDistribuion, trufToken.totalSupply());
 
         vm.stopPrank();
     }
 
     function testConstructorSuccess() external {
         console.log("Check initial variables");
-        assertEq(address(tfiStakingRewards.rewardsToken()), address(tfiToken), "Reward Token is invalid");
-        assertEq(tfiStakingRewards.owner(), owner, "Owner is invalid");
-        assertEq(tfiStakingRewards.rewardsDistribution(), rewardsDistribuion, "rewardsDistribuion is invalid");
-        assertEq(tfiStakingRewards.totalSupply(), 0, "Initial supply is invalid");
+        assertEq(address(trufStakingRewards.rewardsToken()), address(trufToken), "Reward Token is invalid");
+        assertEq(trufStakingRewards.owner(), owner, "Owner is invalid");
+        assertEq(trufStakingRewards.rewardsDistribution(), rewardsDistribuion, "rewardsDistribuion is invalid");
+        assertEq(trufStakingRewards.totalSupply(), 0, "Initial supply is invalid");
     }
 
     function testConstructorFailure() external {
@@ -57,7 +57,7 @@ contract VirtualStakingRewardsTest is Test {
 
         console.log("Should revert if rewardsDistribution is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new VirtualStakingRewards(address(0), address(tfiToken));
+        new VirtualStakingRewards(address(0), address(trufToken));
     }
 
     function testSetRewardsDuration() external {
@@ -67,12 +67,12 @@ contract VirtualStakingRewardsTest is Test {
 
         uint256 newDuration = 14 days;
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit RewardsDurationUpdated(newDuration);
 
-        tfiStakingRewards.setRewardsDuration(newDuration);
+        trufStakingRewards.setRewardsDuration(newDuration);
 
-        assertEq(tfiStakingRewards.rewardsDuration(), newDuration, "RewardsDuration is invalid");
+        assertEq(trufStakingRewards.rewardsDuration(), newDuration, "RewardsDuration is invalid");
 
         vm.stopPrank();
     }
@@ -82,14 +82,14 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
-        tfiStakingRewards.setRewardsDuration(0);
+        trufStakingRewards.setRewardsDuration(0);
 
         vm.stopPrank();
 
         console.log("Should revert when sender is not owner");
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        tfiStakingRewards.setRewardsDuration(14 days);
+        trufStakingRewards.setRewardsDuration(14 days);
 
         vm.stopPrank();
 
@@ -98,7 +98,7 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSignature("RewardPeriodNotFinished()"));
-        tfiStakingRewards.setRewardsDuration(14 days);
+        trufStakingRewards.setRewardsDuration(14 days);
     }
 
     function testLastTimeRewardApplicable() external {
@@ -110,7 +110,7 @@ contract VirtualStakingRewardsTest is Test {
         vm.warp(block.timestamp + 3 days);
 
         assertEq(
-            tfiStakingRewards.lastTimeRewardApplicable(),
+            trufStakingRewards.lastTimeRewardApplicable(),
             block.timestamp,
             "Return block timestamp if reward period is not finished"
         );
@@ -118,8 +118,8 @@ contract VirtualStakingRewardsTest is Test {
         vm.warp(block.timestamp + 5 days);
 
         assertEq(
-            tfiStakingRewards.lastTimeRewardApplicable(),
-            tfiStakingRewards.periodFinish(),
+            trufStakingRewards.lastTimeRewardApplicable(),
+            trufStakingRewards.periodFinish(),
             "Return periodFinish if reward period is finished"
         );
     }
@@ -141,8 +141,8 @@ contract VirtualStakingRewardsTest is Test {
 
         uint256 rewardRate = rewardAmount / 7 days;
         assertEq(
-            tfiStakingRewards.rewardPerToken(),
-            tfiStakingRewards.rewardPerTokenStored() + (1 days * rewardRate * 1e18 / totalSupply),
+            trufStakingRewards.rewardPerToken(),
+            trufStakingRewards.rewardPerTokenStored() + (1 days * rewardRate * 1e18 / totalSupply),
             "RewardPerToken is invalid"
         );
 
@@ -152,7 +152,7 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.warp(block.timestamp + 1 days);
         assertEq(
-            tfiStakingRewards.rewardPerToken(), tfiStakingRewards.rewardPerTokenStored(), "RewardPerToken is invalid"
+            trufStakingRewards.rewardPerToken(), trufStakingRewards.rewardPerTokenStored(), "RewardPerToken is invalid"
         );
     }
 
@@ -174,10 +174,10 @@ contract VirtualStakingRewardsTest is Test {
         vm.warp(block.timestamp + 1 days);
 
         assertEq(
-            tfiStakingRewards.earned(alice),
+            trufStakingRewards.earned(alice),
             (aliceAmount + aliceAmount2)
-                * (tfiStakingRewards.rewardPerToken() - tfiStakingRewards.userRewardPerTokenPaid(alice)) / 1e18
-                + tfiStakingRewards.rewards(alice),
+                * (trufStakingRewards.rewardPerToken() - trufStakingRewards.userRewardPerTokenPaid(alice)) / 1e18
+                + trufStakingRewards.rewards(alice),
             "Earned amount is invalid"
         );
     }
@@ -189,7 +189,7 @@ contract VirtualStakingRewardsTest is Test {
         _notifyReward(rewardAmount);
 
         uint256 rewardRate = rewardAmount / 7 days;
-        assertEq(tfiStakingRewards.getRewardForDuration(), rewardRate * 7 days, "Reward for duration is invalid");
+        assertEq(trufStakingRewards.getRewardForDuration(), rewardRate * 7 days, "Reward for duration is invalid");
     }
 
     function testStake_FirstTime() external {
@@ -199,13 +199,13 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(operator);
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit Staked(alice, amount);
 
-        tfiStakingRewards.stake(alice, amount);
+        trufStakingRewards.stake(alice, amount);
 
-        assertEq(tfiStakingRewards.totalSupply(), amount, "Total supply is invalid");
-        assertEq(tfiStakingRewards.balanceOf(alice), amount, "Balance is invalid");
+        assertEq(trufStakingRewards.totalSupply(), amount, "Total supply is invalid");
+        assertEq(trufStakingRewards.balanceOf(alice), amount, "Balance is invalid");
 
         vm.stopPrank();
     }
@@ -221,25 +221,25 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(operator);
 
-        tfiStakingRewards.stake(alice, firstAmount);
+        trufStakingRewards.stake(alice, firstAmount);
 
         vm.warp(block.timestamp + 3 days);
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit Staked(alice, secondAmount);
 
-        tfiStakingRewards.stake(alice, secondAmount);
+        trufStakingRewards.stake(alice, secondAmount);
 
         // Validate supply and balance
-        assertEq(tfiStakingRewards.totalSupply(), firstAmount + secondAmount, "Total supply is invalid");
-        assertEq(tfiStakingRewards.balanceOf(alice), firstAmount + secondAmount, "Balance is invalid");
+        assertEq(trufStakingRewards.totalSupply(), firstAmount + secondAmount, "Total supply is invalid");
+        assertEq(trufStakingRewards.balanceOf(alice), firstAmount + secondAmount, "Balance is invalid");
 
         // Validate rewards updates
-        assertEq(tfiStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
-        assertEq(tfiStakingRewards.rewards(alice), tfiStakingRewards.earned(alice), "Reward was not updated");
+        assertEq(trufStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
+        assertEq(trufStakingRewards.rewards(alice), trufStakingRewards.earned(alice), "Reward was not updated");
         assertEq(
-            tfiStakingRewards.userRewardPerTokenPaid(alice),
-            tfiStakingRewards.rewardPerTokenStored(),
+            trufStakingRewards.userRewardPerTokenPaid(alice),
+            trufStakingRewards.rewardPerTokenStored(),
             "UserRewardPerTokenPaid was not updated"
         );
 
@@ -251,18 +251,18 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(operator);
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        tfiStakingRewards.stake(address(0), 1e18);
+        trufStakingRewards.stake(address(0), 1e18);
 
         console.log("Should revert to stake for zero amount");
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
-        tfiStakingRewards.stake(alice, 0);
+        trufStakingRewards.stake(alice, 0);
 
         vm.stopPrank();
 
         console.log("Should revert when sender is not operator");
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", owner));
-        tfiStakingRewards.stake(alice, 1e18);
+        trufStakingRewards.stake(alice, 1e18);
 
         vm.stopPrank();
     }
@@ -278,25 +278,25 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(operator);
 
-        tfiStakingRewards.stake(alice, stakeAmount);
+        trufStakingRewards.stake(alice, stakeAmount);
 
         vm.warp(block.timestamp + 3 days);
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit Withdrawn(alice, amount);
 
-        tfiStakingRewards.withdraw(alice, amount);
+        trufStakingRewards.withdraw(alice, amount);
 
         // Validate supply and balance
-        assertEq(tfiStakingRewards.totalSupply(), stakeAmount - amount, "Total supply is invalid");
-        assertEq(tfiStakingRewards.balanceOf(alice), stakeAmount - amount, "Balance is invalid");
+        assertEq(trufStakingRewards.totalSupply(), stakeAmount - amount, "Total supply is invalid");
+        assertEq(trufStakingRewards.balanceOf(alice), stakeAmount - amount, "Balance is invalid");
 
         // Validate rewards updates
-        assertEq(tfiStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
-        assertEq(tfiStakingRewards.rewards(alice), tfiStakingRewards.earned(alice), "Reward was not updated");
+        assertEq(trufStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
+        assertEq(trufStakingRewards.rewards(alice), trufStakingRewards.earned(alice), "Reward was not updated");
         assertEq(
-            tfiStakingRewards.userRewardPerTokenPaid(alice),
-            tfiStakingRewards.rewardPerTokenStored(),
+            trufStakingRewards.userRewardPerTokenPaid(alice),
+            trufStakingRewards.rewardPerTokenStored(),
             "UserRewardPerTokenPaid was not updated"
         );
 
@@ -307,14 +307,14 @@ contract VirtualStakingRewardsTest is Test {
         vm.startPrank(operator);
         console.log("Should revert to withdraw zero amount");
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
-        tfiStakingRewards.withdraw(alice, 0);
+        trufStakingRewards.withdraw(alice, 0);
 
         vm.stopPrank();
 
         console.log("Should revert when sender is not operator");
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", owner));
-        tfiStakingRewards.withdraw(alice, 1e18);
+        trufStakingRewards.withdraw(alice, 1e18);
 
         vm.stopPrank();
     }
@@ -329,30 +329,30 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(operator);
 
-        tfiStakingRewards.stake(alice, stakeAmount);
+        trufStakingRewards.stake(alice, stakeAmount);
 
         vm.warp(block.timestamp + 3 days);
 
-        uint256 reward = tfiStakingRewards.earned(alice);
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        uint256 reward = trufStakingRewards.earned(alice);
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit RewardPaid(alice, reward);
 
-        tfiStakingRewards.getReward(alice);
+        trufStakingRewards.getReward(alice);
 
         // Validate supply and balance
-        assertEq(tfiStakingRewards.totalSupply(), stakeAmount, "Total supply is invalid");
-        assertEq(tfiStakingRewards.balanceOf(alice), stakeAmount, "Balance is invalid");
+        assertEq(trufStakingRewards.totalSupply(), stakeAmount, "Total supply is invalid");
+        assertEq(trufStakingRewards.balanceOf(alice), stakeAmount, "Balance is invalid");
 
         // Validate rewards updates
-        assertEq(tfiStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
-        assertEq(tfiStakingRewards.rewards(alice), 0, "Reward was not updated");
+        assertEq(trufStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
+        assertEq(trufStakingRewards.rewards(alice), 0, "Reward was not updated");
         assertEq(
-            tfiStakingRewards.userRewardPerTokenPaid(alice),
-            tfiStakingRewards.rewardPerTokenStored(),
+            trufStakingRewards.userRewardPerTokenPaid(alice),
+            trufStakingRewards.rewardPerTokenStored(),
             "UserRewardPerTokenPaid was not updated"
         );
 
-        assertEq(tfiToken.balanceOf(alice), reward, "Received reward is invalid");
+        assertEq(trufToken.balanceOf(alice), reward, "Received reward is invalid");
 
         vm.stopPrank();
     }
@@ -362,9 +362,9 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(operator);
 
-        tfiStakingRewards.getReward(alice);
+        trufStakingRewards.getReward(alice);
 
-        assertEq(tfiToken.balanceOf(alice), 0, "Reward should be zero");
+        assertEq(trufToken.balanceOf(alice), 0, "Reward should be zero");
 
         vm.stopPrank();
     }
@@ -382,24 +382,24 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.warp(block.timestamp + 3 days);
 
-        uint256 reward = tfiStakingRewards.earned(alice);
+        uint256 reward = trufStakingRewards.earned(alice);
 
-        tfiStakingRewards.exit(alice);
+        trufStakingRewards.exit(alice);
 
         // Validate supply and balance
-        assertEq(tfiStakingRewards.totalSupply(), 0, "Total supply is invalid");
-        assertEq(tfiStakingRewards.balanceOf(alice), 0, "Balance is invalid");
+        assertEq(trufStakingRewards.totalSupply(), 0, "Total supply is invalid");
+        assertEq(trufStakingRewards.balanceOf(alice), 0, "Balance is invalid");
 
         // Validate rewards updates
-        assertEq(tfiStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
-        assertEq(tfiStakingRewards.rewards(alice), 0, "Reward was not updated");
+        assertEq(trufStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
+        assertEq(trufStakingRewards.rewards(alice), 0, "Reward was not updated");
         assertEq(
-            tfiStakingRewards.userRewardPerTokenPaid(alice),
-            tfiStakingRewards.rewardPerTokenStored(),
+            trufStakingRewards.userRewardPerTokenPaid(alice),
+            trufStakingRewards.rewardPerTokenStored(),
             "UserRewardPerTokenPaid was not updated"
         );
 
-        assertEq(tfiToken.balanceOf(alice), reward, "Received reward is invalid");
+        assertEq(trufToken.balanceOf(alice), reward, "Received reward is invalid");
 
         vm.stopPrank();
     }
@@ -418,14 +418,14 @@ contract VirtualStakingRewardsTest is Test {
 
         _withdraw(alice, stakeAmount);
 
-        uint256 reward = tfiStakingRewards.earned(alice);
+        uint256 reward = trufStakingRewards.earned(alice);
 
-        assertEq(tfiStakingRewards.rewards(alice), reward, "Reward was not updated");
+        assertEq(trufStakingRewards.rewards(alice), reward, "Reward was not updated");
 
-        tfiStakingRewards.exit(alice);
-        assertEq(tfiStakingRewards.rewards(alice), 0, "Reward was not updated");
+        trufStakingRewards.exit(alice);
+        assertEq(trufStakingRewards.rewards(alice), 0, "Reward was not updated");
 
-        assertEq(tfiToken.balanceOf(alice), reward, "Received reward is invalid");
+        assertEq(trufToken.balanceOf(alice), reward, "Received reward is invalid");
     }
 
     function testNotifyRewardAmount() external {
@@ -434,15 +434,15 @@ contract VirtualStakingRewardsTest is Test {
         uint256 rewards = 100e18;
         vm.startPrank(rewardsDistribuion);
 
-        tfiToken.transfer(address(tfiStakingRewards), rewards);
+        trufToken.transfer(address(trufStakingRewards), rewards);
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit RewardAdded(rewards);
-        tfiStakingRewards.notifyRewardAmount(rewards);
+        trufStakingRewards.notifyRewardAmount(rewards);
 
-        assertEq(tfiStakingRewards.lastUpdateTime(), block.timestamp, "lastUpdateTime is invalid");
-        assertEq(tfiStakingRewards.periodFinish(), block.timestamp + 7 days, "periodFinish is invalid");
-        assertEq(tfiStakingRewards.rewardRate(), rewards / 7 days, "periodFinish is invalid");
+        assertEq(trufStakingRewards.lastUpdateTime(), block.timestamp, "lastUpdateTime is invalid");
+        assertEq(trufStakingRewards.periodFinish(), block.timestamp + 7 days, "periodFinish is invalid");
+        assertEq(trufStakingRewards.rewardRate(), rewards / 7 days, "periodFinish is invalid");
 
         vm.stopPrank();
     }
@@ -460,17 +460,17 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(rewardsDistribuion);
 
-        tfiToken.transfer(address(tfiStakingRewards), rewards);
+        trufToken.transfer(address(trufStakingRewards), rewards);
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit RewardAdded(rewards);
-        tfiStakingRewards.notifyRewardAmount(rewards);
+        trufStakingRewards.notifyRewardAmount(rewards);
 
-        assertEq(tfiStakingRewards.lastUpdateTime(), block.timestamp, "lastUpdateTime is invalid");
-        assertEq(tfiStakingRewards.periodFinish(), block.timestamp + 7 days, "periodFinish is invalid");
+        assertEq(trufStakingRewards.lastUpdateTime(), block.timestamp, "lastUpdateTime is invalid");
+        assertEq(trufStakingRewards.periodFinish(), block.timestamp + 7 days, "periodFinish is invalid");
 
         assertEq(
-            tfiStakingRewards.rewardRate(),
+            trufStakingRewards.rewardRate(),
             (firstRewards / 7 days * 4 days + rewards) / 7 days,
             "periodFinish is invalid"
         );
@@ -484,10 +484,10 @@ contract VirtualStakingRewardsTest is Test {
         uint256 rewards = 100e18;
         vm.startPrank(rewardsDistribuion);
 
-        tfiToken.transfer(address(tfiStakingRewards), rewards);
+        trufToken.transfer(address(trufStakingRewards), rewards);
 
         vm.expectRevert(abi.encodeWithSignature("InsufficientRewards()"));
-        tfiStakingRewards.notifyRewardAmount(101e18);
+        trufStakingRewards.notifyRewardAmount(101e18);
 
         vm.stopPrank();
     }
@@ -496,12 +496,12 @@ contract VirtualStakingRewardsTest is Test {
         console.log("Set rewards distribution");
         vm.startPrank(owner);
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit RewardsDistributionUpdated(alice);
 
-        tfiStakingRewards.setRewardsDistribution(alice);
+        trufStakingRewards.setRewardsDistribution(alice);
 
-        assertEq(tfiStakingRewards.rewardsDistribution(), alice, "RewardsDistribution is invalid");
+        assertEq(trufStakingRewards.rewardsDistribution(), alice, "RewardsDistribution is invalid");
 
         vm.stopPrank();
     }
@@ -511,14 +511,14 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        tfiStakingRewards.setRewardsDistribution(address(0));
+        trufStakingRewards.setRewardsDistribution(address(0));
 
         vm.stopPrank();
 
         console.log("Should revert when sender is not owner");
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        tfiStakingRewards.setRewardsDistribution(alice);
+        trufStakingRewards.setRewardsDistribution(alice);
 
         vm.stopPrank();
     }
@@ -527,12 +527,12 @@ contract VirtualStakingRewardsTest is Test {
         console.log("Set operator");
         vm.startPrank(owner);
 
-        vm.expectEmit(true, true, true, true, address(tfiStakingRewards));
+        vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit OperatorUpdated(alice);
 
-        tfiStakingRewards.setOperator(alice);
+        trufStakingRewards.setOperator(alice);
 
-        assertEq(tfiStakingRewards.operator(), alice, "Operator is invalid");
+        assertEq(trufStakingRewards.operator(), alice, "Operator is invalid");
 
         vm.stopPrank();
     }
@@ -542,14 +542,14 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        tfiStakingRewards.setOperator(address(0));
+        trufStakingRewards.setOperator(address(0));
 
         vm.stopPrank();
 
         console.log("Should revert when sender is not owner");
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        tfiStakingRewards.setOperator(alice);
+        trufStakingRewards.setOperator(alice);
 
         vm.stopPrank();
     }
@@ -557,8 +557,8 @@ contract VirtualStakingRewardsTest is Test {
     function _notifyReward(uint256 amount) internal {
         vm.startPrank(rewardsDistribuion);
 
-        tfiToken.transfer(address(tfiStakingRewards), amount);
-        tfiStakingRewards.notifyRewardAmount(amount);
+        trufToken.transfer(address(trufStakingRewards), amount);
+        trufStakingRewards.notifyRewardAmount(amount);
 
         vm.stopPrank();
     }
@@ -566,7 +566,7 @@ contract VirtualStakingRewardsTest is Test {
     function _stake(address user, uint256 amount) internal {
         vm.startPrank(operator);
 
-        tfiStakingRewards.stake(user, amount);
+        trufStakingRewards.stake(user, amount);
 
         vm.stopPrank();
     }
@@ -574,7 +574,7 @@ contract VirtualStakingRewardsTest is Test {
     function _withdraw(address user, uint256 amount) internal {
         vm.startPrank(operator);
 
-        tfiStakingRewards.withdraw(user, amount);
+        trufStakingRewards.withdraw(user, amount);
 
         vm.stopPrank();
     }

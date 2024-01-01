@@ -7,11 +7,11 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 /**
- * @title TfiMigrator smart contract
+ * @title TrufMigrator smart contract
  * @author Ryuhei Matsuda
  * @notice Users could claim tokens based on snapshot(stored by merkle tree).
  */
-contract TfiMigrator is Ownable2Step {
+contract TrufMigrator is Ownable2Step {
     using SafeERC20 for IERC20;
 
     error InvalidProof();
@@ -20,12 +20,12 @@ contract TfiMigrator is Ownable2Step {
     event SetMerkleRoot(bytes32 merkleRoot);
     event Migrated(address indexed user, uint256 amount);
 
-    IERC20 public immutable tfiToken;
+    IERC20 public immutable trufToken;
     bytes32 public merkleRoot;
     mapping(address => uint256) public migratedAmount;
 
-    constructor(address _tfiToken) {
-        tfiToken = IERC20(_tfiToken);
+    constructor(address _trufToken) {
+        trufToken = IERC20(_trufToken);
     }
 
     /**
@@ -40,7 +40,7 @@ contract TfiMigrator is Ownable2Step {
     }
 
     /**
-     * Claim new tfi token based on snapshot(merkle tree)
+     * Claim new TRUF token based on snapshot(merkle tree)
      * @param index index of leaf
      * @param amount token amount
      * @param proof merkle proof
@@ -61,17 +61,17 @@ contract TfiMigrator is Ownable2Step {
         migratedAmount[msg.sender] = amount;
 
         uint256 migrateAmount = amount - _migratedAmount;
-        tfiToken.safeTransfer(msg.sender, migrateAmount);
+        trufToken.safeTransfer(msg.sender, migrateAmount);
 
         emit Migrated(msg.sender, migrateAmount);
     }
 
     /**
-     * Withdraw TFI tokens if we sent more tokens
+     * Withdraw TRUF tokens if we sent more tokens
      * @notice Only owner can call
      * @param amount Withdrawal amount
      */
-    function withdrawTfi(uint256 amount) external onlyOwner {
-        tfiToken.safeTransfer(msg.sender, amount);
+    function withdrawTruf(uint256 amount) external onlyOwner {
+        trufToken.safeTransfer(msg.sender, amount);
     }
 }

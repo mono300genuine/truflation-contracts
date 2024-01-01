@@ -10,7 +10,7 @@ import {IVirtualStakingRewards} from "../interfaces/IVirtualStakingRewards.sol";
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
 
 /**
- * @title VotingEscrowTFI smart contract (modified from Origin Staking for Truflation)
+ * @title VotingEscrowTRUF smart contract (modified from Origin Staking for Truflation)
  * @author Ryuhei Matsuda
  * @notice Provides staking, vote power history, vote delegation, and rewards
  * distribution.
@@ -19,7 +19,7 @@ import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
  * distribution) goes up exponentially by the end of the staked period.
  */
 
-contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
+contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();
@@ -50,17 +50,17 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     /// @dev lockup list per users
     mapping(address => Lockup[]) public lockups;
 
-    /// @dev TFI token address
-    IERC20 public immutable tfiToken; // Must not allow reentrancy
+    /// @dev TRUF token address
+    IERC20 public immutable trufToken; // Must not allow reentrancy
 
     /// @dev Virtual staking rewards contract address
     IVirtualStakingRewards public immutable stakingRewards;
 
-    /// @dev TFI Vesting contract address
-    address public immutable tfiVesting;
+    /// @dev TRUF Vesting contract address
+    address public immutable trufVesting;
 
     modifier onlyVesting() {
-        if (msg.sender != tfiVesting) {
+        if (msg.sender != trufVesting) {
             revert Forbidden(msg.sender);
         }
         _;
@@ -68,12 +68,12 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
 
     // 1. Core Functions
 
-    constructor(address _tfiToken, address _tfiVesting, uint256 _minStakeDuration, address _stakingRewards)
-        ERC20("Voting Escrowed TFI", "veTFI")
-        ERC20Permit("veTFI")
+    constructor(address _trufToken, address _trufVesting, uint256 _minStakeDuration, address _stakingRewards)
+        ERC20("Voting Escrowed TRUF", "veTRUF")
+        ERC20Permit("veTRUF")
     {
-        tfiToken = IERC20(_tfiToken);
-        tfiVesting = _tfiVesting;
+        trufToken = IERC20(_trufToken);
+        trufVesting = _trufVesting;
         minStakeDuration = _minStakeDuration;
         stakingRewards = IVirtualStakingRewards(_stakingRewards);
     }
@@ -85,11 +85,11 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     // 2. Staking and Lockup Functions
 
     /**
-     * @notice Stake TFI to an address that may not be the same as the
+     * @notice Stake TRUF to an address that may not be the same as the
      * sender of the funds. This can be used to give staked funds to someone
      * else.
      *
-     * @param amount TFI to lockup in the stake
+     * @param amount TRUF to lockup in the stake
      * @param duration in seconds for the stake
      * @param to address to receive ownership of the stake
      */
@@ -98,8 +98,8 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Stake TFI from vesting
-     * @param amount TFI to lockup in the stake
+     * @notice Stake TRUF from vesting
+     * @param amount TRUF to lockup in the stake
      * @param duration in seconds for the stake
      * @param to address to receive ownership of the stake
      * @return lockupId Lockup id
@@ -109,16 +109,16 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
         onlyVesting
         returns (uint256 lockupId)
     {
-        if (to == tfiVesting) {
+        if (to == trufVesting) {
             revert InvalidAccount();
         }
         lockupId = _stake(amount, duration, to, true);
     }
 
     /**
-     * @notice Stake TFI
+     * @notice Stake TRUF
      *
-     * @param amount TFI to lockup in the stake
+     * @param amount TRUF to lockup in the stake
      * @param duration in seconds for the stake
      * @return lockupId Lockup id
      */
@@ -128,7 +128,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
 
     /**
      * @dev Internal method used for public staking
-     * @param amount TFI to lockup in the stake
+     * @param amount TRUF to lockup in the stake
      * @param duration in seconds for the stake
      * @param to address to receive ownership of the stake
      * @param isVesting flag to stake with vested tokens or not
@@ -161,7 +161,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
             })
         );
 
-        tfiToken.safeTransferFrom(msg.sender, address(this), amount); // Important that it's sender
+        trufToken.safeTransferFrom(msg.sender, address(this), amount); // Important that it's sender
 
         stakingRewards.stake(to, points);
         _mint(to, points);
@@ -176,20 +176,20 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Collect staked TFI for a lockup.
+     * @notice Collect staked TRUF for a lockup.
      * @param lockupId the id of the lockup to unstake
-     * @return amount TFI amount returned
+     * @return amount TRUF amount returned
      */
     function unstake(uint256 lockupId) external returns (uint256 amount) {
         amount = _unstake(msg.sender, lockupId, false, false);
     }
 
     /**
-     * @notice Collect staked TFI for a vesting lockup.
+     * @notice Collect staked TRUF for a vesting lockup.
      * @param user User address
      * @param lockupId the id of the lockup to unstake
      * @param force True to unstake before maturity (Used to cancel vesting)
-     * @return amount TFI amount returned
+     * @return amount TRUF amount returned
      */
     function unstakeVesting(address user, uint256 lockupId, bool force) external onlyVesting returns (uint256 amount) {
         amount = _unstake(user, lockupId, true, force);
@@ -252,7 +252,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Claim TFI staking rewards
+     * @notice Claim TRUF staking rewards
      */
     function claimReward() external {
         stakingRewards.getReward(msg.sender);
@@ -262,7 +262,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
      * @notice Preview the number of points that would be returned for the
      * given amount and duration.
      *
-     * @param amount TFI to be staked
+     * @param amount TRUF to be staked
      * @param duration number of seconds to stake for
      * @return points staking points that would be returned
      * @return end staking period end date
@@ -304,7 +304,7 @@ contract VotingEscrowTfi is ERC20Votes, IVotingEscrow {
 
         stakingRewards.withdraw(user, points);
         _burn(user, points);
-        tfiToken.safeTransfer(msg.sender, amount); // Sender is msg.sender
+        trufToken.safeTransfer(msg.sender, amount); // Sender is msg.sender
 
         emit Unstake(user, isVesting, lockupId, amount, end, points);
 

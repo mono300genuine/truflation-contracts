@@ -3,16 +3,16 @@ pragma solidity 0.8.19;
 
 import "forge-std/Script.sol";
 import "../src/token/TruflationToken.sol";
-import "../src/token/TfiVesting.sol";
-import "../src/token/VotingEscrowTfi.sol";
+import "../src/token/TrufVesting.sol";
+import "../src/token/VotingEscrowTruf.sol";
 import "../src/staking/VirtualStakingRewards.sol";
 
 contract DeployTokenAndVesting is Script {
     using stdJson for string;
 
     TruflationToken public tfiToken;
-    TfiVesting public vesting;
-    VotingEscrowTfi public veTFI;
+    TrufVesting public vesting;
+    VotingEscrowTruf public veTRUF;
     VirtualStakingRewards public tfiStakingRewards;
 
     function setUp() public {}
@@ -25,12 +25,12 @@ contract DeployTokenAndVesting is Script {
         tfiToken = new TruflationToken();
 
         uint64 tgeTime = 1702997500;
-        vesting = new TfiVesting(tfiToken, tgeTime);
+        vesting = new TrufVesting(tfiToken, tgeTime);
 
         tfiStakingRewards = new VirtualStakingRewards(vm.addr(privateKey), address(tfiToken));
-        veTFI = new VotingEscrowTfi(address(tfiToken), address(vesting), 1 hours, address(tfiStakingRewards));
-        tfiStakingRewards.setOperator(address(veTFI));
-        vesting.setVeTfi(address(veTFI));
+        veTRUF = new VotingEscrowTruf(address(tfiToken), address(vesting), 1 hours, address(tfiStakingRewards));
+        tfiStakingRewards.setOperator(address(veTRUF));
+        vesting.setVeTruf(address(veTRUF));
 
         tfiStakingRewards.setRewardsDuration(30 days);
         tfiToken.transfer(address(tfiStakingRewards), 100_000e18);

@@ -7,12 +7,12 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
 
 /**
- * @title TFI vesting contract
+ * @title TRUF vesting contract
  * @author Ryuhei Matsuda
  * @notice Admin registers vesting information for users,
- *      and users could claim or lock vesting to veTFI to get voting power and TFI staking rewards
+ *      and users could claim or lock vesting to veTRUF to get voting power and TRUF staking rewards
  */
-contract TfiVesting is Ownable {
+contract TrufVesting is Ownable {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();
@@ -57,13 +57,13 @@ contract TfiVesting is Ownable {
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, bool giveUnclaimed
     );
 
-    /// @dev Emitted when user claimed vested TFI tokens
+    /// @dev Emitted when user claimed vested TRUF tokens
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
-    /// @dev Emitted when veTFI token has been set
-    event VeTfiSet(address indexed veTFI);
+    /// @dev Emitted when veTRUF token has been set
+    event VeTrufSet(address indexed veTRUF);
 
-    /// @dev Emitted when user stakes vesting to veTFI
+    /// @dev Emitted when user stakes vesting to veTRUF
     event Staked(
         uint256 indexed categoryId,
         uint256 indexed vestingId,
@@ -73,12 +73,12 @@ contract TfiVesting is Ownable {
         uint256 lockupId
     );
 
-    /// @dev Emitted when user extended veTFI staking period
+    /// @dev Emitted when user extended veTRUF staking period
     event ExtendedStaking(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
     );
 
-    /// @dev Emitted when user unstakes from veTFI
+    /// @dev Emitted when user unstakes from veTRUF
     event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
     /// @dev Vesting Category struct
@@ -110,11 +110,11 @@ contract TfiVesting is Ownable {
     uint256 public constant DENOMINATOR = 10000;
     uint64 public constant ONE_MONTH = 30 days;
 
-    /// @dev TFI token address
-    IERC20 public immutable tfiToken;
+    /// @dev TRUF token address
+    IERC20 public immutable trufToken;
 
-    /// @dev veTFI token address
-    IVotingEscrow public veTFI;
+    /// @dev veTRUF token address
+    IVotingEscrow public veTRUF;
 
     /// @dev TGE timestamp
     uint64 public immutable tgeTime;
@@ -135,13 +135,13 @@ contract TfiVesting is Ownable {
     mapping(uint256 => mapping(uint256 => mapping(address => uint256))) public lockupIds;
 
     /**
-     * @notice TFI Vesting constructor
-     * @param _tfiToken TFI token address
+     * @notice TRUF Vesting constructor
+     * @param _trufToken TRUF token address
      */
-    constructor(IERC20 _tfiToken, uint64 _tgeTime) {
-        if (address(_tfiToken) == address(0)) revert ZeroAddress();
+    constructor(IERC20 _trufToken, uint64 _tgeTime) {
+        if (address(_trufToken) == address(0)) revert ZeroAddress();
 
-        tfiToken = _tfiToken;
+        trufToken = _trufToken;
 
         if (_tgeTime < block.timestamp) {
             revert InvalidTimestamp();
@@ -221,13 +221,13 @@ contract TfiVesting is Ownable {
 
         categories[categoryId].totalClaimed += claimAmount;
         userVestings[categoryId][vestingId][user].claimed += claimAmount;
-        tfiToken.safeTransfer(user, claimAmount);
+        trufToken.safeTransfer(user, claimAmount);
 
         emit Claimed(categoryId, vestingId, user, claimAmount);
     }
 
     /**
-     * @notice Stake vesting to veTFI to get voting power and get staking TFI rewards
+     * @notice Stake vesting to veTRUF to get voting power and get staking TRUF rewards
      * @param categoryId category id
      * @param vestingId vesting id
      * @param amount amount to stake
@@ -249,15 +249,15 @@ contract TfiVesting is Ownable {
 
         userVesting.locked += amount;
 
-        tfiToken.safeIncreaseAllowance(address(veTFI), amount);
-        uint256 lockupId = veTFI.stakeVesting(amount, duration, msg.sender) + 1;
+        trufToken.safeIncreaseAllowance(address(veTRUF), amount);
+        uint256 lockupId = veTRUF.stakeVesting(amount, duration, msg.sender) + 1;
         lockupIds[categoryId][vestingId][msg.sender] = lockupId;
 
         emit Staked(categoryId, vestingId, msg.sender, amount, duration, lockupId);
     }
 
     /**
-     * @notice Extend veTFI staking period
+     * @notice Extend veTRUF staking period
      * @param categoryId category id
      * @param vestingId vesting id
      * @param duration lock period from now
@@ -268,13 +268,13 @@ contract TfiVesting is Ownable {
             revert LockDoesNotExist();
         }
 
-        veTFI.extendVestingLock(msg.sender, lockupId - 1, duration);
+        veTRUF.extendVestingLock(msg.sender, lockupId - 1, duration);
 
         emit ExtendedStaking(categoryId, vestingId, msg.sender, duration);
     }
 
     /**
-     * @notice Unstake vesting from veTFI
+     * @notice Unstake vesting from veTRUF
      * @param categoryId category id
      * @param vestingId vesting id
      */
@@ -284,7 +284,7 @@ contract TfiVesting is Ownable {
             revert LockDoesNotExist();
         }
 
-        uint256 amount = veTFI.unstakeVesting(msg.sender, lockupId - 1, false);
+        uint256 amount = veTRUF.unstakeVesting(msg.sender, lockupId - 1, false);
 
         UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
 
@@ -321,7 +321,7 @@ contract TfiVesting is Ownable {
         uint256 newLockupId;
 
         if (lockupId != 0) {
-            newLockupId = veTFI.migrateVestingLock(prevUser, newUser, lockupId - 1) + 1;
+            newLockupId = veTRUF.migrateVestingLock(prevUser, newUser, lockupId - 1) + 1;
             lockupIds[categoryId][vestingId][newUser] = newLockupId;
             delete lockupIds[categoryId][vestingId][prevUser];
 
@@ -357,7 +357,7 @@ contract TfiVesting is Ownable {
         uint256 lockupId = lockupIds[categoryId][vestingId][user];
 
         if (lockupId != 0) {
-            veTFI.unstakeVesting(user, lockupId - 1, true);
+            veTRUF.unstakeVesting(user, lockupId - 1, true);
             delete lockupIds[categoryId][vestingId][user];
             userVesting.locked = 0;
         }
@@ -366,7 +366,7 @@ contract TfiVesting is Ownable {
 
         uint256 claimableAmount = claimable(categoryId, vestingId, user);
         if (giveUnclaimed && claimableAmount != 0) {
-            tfiToken.safeTransfer(user, claimableAmount);
+            trufToken.safeTransfer(user, claimableAmount);
 
             userVesting.claimed += claimableAmount;
             category.totalClaimed += claimableAmount;
@@ -417,9 +417,9 @@ contract TfiVesting is Ownable {
         }
 
         if (tokenMove > 0) {
-            tfiToken.safeTransferFrom(msg.sender, address(this), uint256(tokenMove));
+            trufToken.safeTransferFrom(msg.sender, address(this), uint256(tokenMove));
         } else if (tokenMove < 0) {
-            tfiToken.safeTransfer(msg.sender, uint256(-tokenMove));
+            trufToken.safeTransfer(msg.sender, uint256(-tokenMove));
         }
 
         emit VestingCategorySet(id, category, maxAllocation, adminClaimable);
@@ -511,17 +511,17 @@ contract TfiVesting is Ownable {
     }
 
     /**
-     * @notice Set veTFI token
-     * @dev Only admin can set veTFI
-     * @param _veTFI veTFI token address
+     * @notice Set veTRUF token
+     * @dev Only admin can set veTRUF
+     * @param _veTRUF veTRUF token address
      */
-    function setVeTfi(address _veTFI) external onlyOwner {
-        if (_veTFI == address(0)) {
+    function setVeTruf(address _veTRUF) external onlyOwner {
+        if (_veTRUF == address(0)) {
             revert ZeroAddress();
         }
-        veTFI = IVotingEscrow(_veTFI);
+        veTRUF = IVotingEscrow(_veTRUF);
 
-        emit VeTfiSet(_veTFI);
+        emit VeTrufSet(_veTRUF);
     }
 
     /**

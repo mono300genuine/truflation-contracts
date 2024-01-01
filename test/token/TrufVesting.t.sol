@@ -4,14 +4,14 @@ pragma solidity 0.8.19;
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 import "../../src/token/TruflationToken.sol";
-import "../../src/token/TfiVesting.sol";
-import "../../src/token/VotingEscrowTfi.sol";
+import "../../src/token/TrufVesting.sol";
+import "../../src/token/VotingEscrowTruf.sol";
 import "../../src/staking/VirtualStakingRewards.sol";
 
-contract TfiVestingTest is Test {
+contract TrufVestingTest is Test {
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation, bool adminClaimable);
     event EmissionScheduleSet(uint256 indexed categoryId, uint256[] emissions);
-    event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, TfiVesting.VestingInfo info);
+    event VestingInfoSet(uint256 indexed categoryId, uint256 indexed id, TrufVesting.VestingInfo info);
     event UserVestingSet(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint64 startTime
     );
@@ -22,7 +22,7 @@ contract TfiVestingTest is Test {
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, bool giveUnclaimed
     );
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
-    event VeTfiSet(address indexed veTFI);
+    event VeTrufSet(address indexed veTRUF);
     event Staked(
         uint256 indexed categoryId,
         uint256 indexed vestingId,
@@ -36,10 +36,10 @@ contract TfiVestingTest is Test {
     );
     event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
-    TruflationToken public tfiToken;
-    TfiVesting public vesting;
-    VotingEscrowTfi public veTFI;
-    VirtualStakingRewards public tfiStakingRewards;
+    TruflationToken public trufToken;
+    TrufVesting public vesting;
+    VotingEscrowTruf public veTRUF;
+    VirtualStakingRewards public trufStakingRewards;
 
     // Users
     address public alice;
@@ -61,30 +61,30 @@ contract TfiVestingTest is Test {
         vm.warp(1696816730);
 
         vm.startPrank(owner);
-        tfiToken = new TruflationToken();
-        vesting = new TfiVesting(tfiToken, uint64(block.timestamp) + 1 days);
-        tfiStakingRewards = new VirtualStakingRewards(owner, address(tfiToken));
-        veTFI = new VotingEscrowTfi(address(tfiToken), address(vesting), 1 hours, address(tfiStakingRewards));
-        tfiStakingRewards.setOperator(address(veTFI));
-        vesting.setVeTfi(address(veTFI));
+        trufToken = new TruflationToken();
+        vesting = new TrufVesting(trufToken, uint64(block.timestamp) + 1 days);
+        trufStakingRewards = new VirtualStakingRewards(owner, address(trufToken));
+        veTRUF = new VotingEscrowTruf(address(trufToken), address(vesting), 1 hours, address(trufStakingRewards));
+        trufStakingRewards.setOperator(address(veTRUF));
+        vesting.setVeTruf(address(veTRUF));
 
         vm.stopPrank();
     }
 
     function testConstructorSuccess() external {
         console.log("Check initial variables");
-        assertEq(address(vesting.tfiToken()), address(tfiToken), "Tfi Token is invalid");
+        assertEq(address(vesting.trufToken()), address(trufToken), "TRUF Token is invalid");
         assertEq(vesting.owner(), owner, "Owner is invalid");
     }
 
     function testConstructorFailure() external {
-        console.log("Should revert if tfiToken is address(0)");
+        console.log("Should revert if trufToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TfiVesting(IERC20(address(0)), uint64(block.timestamp) + 1 days);
+        new TrufVesting(IERC20(address(0)), uint64(block.timestamp) + 1 days);
 
         console.log("Should revert if tge time is less than current time");
         vm.expectRevert(abi.encodeWithSignature("InvalidTimestamp()"));
-        new TfiVesting(tfiToken, uint64(block.timestamp) - 1);
+        new TrufVesting(trufToken, uint64(block.timestamp) - 1);
     }
 
     function testSetVestingCategory_AddFirstCategory() external {
@@ -94,7 +94,7 @@ contract TfiVestingTest is Test {
         bool adminClaimable = true;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit VestingCategorySet(0, category, maxAllocation, adminClaimable);
@@ -102,7 +102,7 @@ contract TfiVestingTest is Test {
         vesting.setVestingCategory(type(uint256).max, category, maxAllocation, adminClaimable);
 
         _validateCategory(0, category, maxAllocation, 0, adminClaimable, 0);
-        assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation, "Balance is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), maxAllocation, "Balance is invalid");
 
         vm.stopPrank();
     }
@@ -114,7 +114,7 @@ contract TfiVestingTest is Test {
         bool adminClaimable = false;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
 
         vm.expectEmit(true, true, true, true, address(vesting));
@@ -122,7 +122,7 @@ contract TfiVestingTest is Test {
         vesting.setVestingCategory(type(uint256).max, category, maxAllocation, adminClaimable);
 
         _validateCategory(1, category, maxAllocation, 0, adminClaimable, 0);
-        assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
 
         vm.stopPrank();
     }
@@ -133,7 +133,7 @@ contract TfiVestingTest is Test {
         bool adminClaimable = false;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
 
@@ -142,7 +142,7 @@ contract TfiVestingTest is Test {
         vesting.setVestingCategory(1, "Private", maxAllocation, adminClaimable);
 
         _validateCategory(1, "Private", maxAllocation, 0, adminClaimable, 0);
-        assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
 
         vm.stopPrank();
     }
@@ -155,22 +155,22 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
 
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
-        vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
+        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
 
-        uint256 ownerTfiBalance = tfiToken.balanceOf(owner);
+        uint256 ownerTrufBalance = trufToken.balanceOf(owner);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit VestingCategorySet(1, "Private", maxAllocation, adminClaimable);
         vesting.setVestingCategory(1, "Private", maxAllocation, adminClaimable);
 
         _validateCategory(1, "Private", maxAllocation, allocated, adminClaimable, 0);
-        assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
-        assertEq(tfiToken.balanceOf(owner), ownerTfiBalance - (maxAllocation - 1e15), "Balance is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
+        assertEq(trufToken.balanceOf(owner), ownerTrufBalance - (maxAllocation - 1e15), "Balance is invalid");
 
         vm.stopPrank();
     }
@@ -183,22 +183,22 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
 
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
-        vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
+        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
 
-        uint256 ownerTfiBalance = tfiToken.balanceOf(owner);
+        uint256 ownerTrufBalance = trufToken.balanceOf(owner);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit VestingCategorySet(1, "Private", maxAllocation, adminClaimable);
         vesting.setVestingCategory(1, "Private", maxAllocation, adminClaimable);
 
         _validateCategory(1, "Private", maxAllocation, allocated, adminClaimable, 0);
-        assertEq(tfiToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
-        assertEq(tfiToken.balanceOf(owner), ownerTfiBalance + (1e15 - maxAllocation), "Balance is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), maxAllocation + 1e20, "Balance is invalid");
+        assertEq(trufToken.balanceOf(owner), ownerTrufBalance + (1e15 - maxAllocation), "Balance is invalid");
 
         vm.stopPrank();
     }
@@ -210,10 +210,10 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
 
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
-        vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
+        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
 
@@ -263,7 +263,7 @@ contract TfiVestingTest is Test {
         uint256 maxAllocation = 1e20;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
 
         uint256[] memory emissions = new uint256[](5);
@@ -287,7 +287,7 @@ contract TfiVestingTest is Test {
         uint256 maxAllocation = 1e20;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
 
         uint256[] memory emissions = new uint256[](5);
@@ -318,7 +318,7 @@ contract TfiVestingTest is Test {
         uint256 maxAllocation = 1e20;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
 
         vm.stopPrank();
@@ -344,7 +344,7 @@ contract TfiVestingTest is Test {
         uint256 maxAllocation = 1e20;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
 
         uint256[] memory emissions;
@@ -361,7 +361,7 @@ contract TfiVestingTest is Test {
         uint256 maxAllocation = 1e20;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
 
         uint256[] memory emissions = new uint256[](5);
@@ -387,13 +387,13 @@ contract TfiVestingTest is Test {
         uint64 unit = 30 days;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingInfoSet(0, 0, TfiVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
+        emit VestingInfoSet(0, 0, TrufVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
         vesting.setVestingInfo(
-            0, type(uint256).max, TfiVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit)
+            0, type(uint256).max, TrufVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit)
         );
         _validateVestingInfo(0, 0, initialReleasePct, initialReleasePeriod, cliff, period, unit);
 
@@ -410,14 +410,14 @@ contract TfiVestingTest is Test {
         uint64 unit = 30 days;
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
-        vesting.setVestingInfo(0, type(uint256).max, TfiVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VestingInfoSet(0, 0, TfiVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
+        emit VestingInfoSet(0, 0, TrufVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
         vesting.setVestingInfo(
-            0, 0, TfiVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit)
+            0, 0, TrufVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit)
         );
         _validateVestingInfo(0, 0, initialReleasePct, initialReleasePeriod, cliff, period, unit);
 
@@ -428,13 +428,13 @@ contract TfiVestingTest is Test {
         console.log("Should revert when sender is not owner");
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vm.stopPrank();
 
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        vesting.setVestingInfo(0, type(uint256).max, TfiVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
 
         vm.stopPrank();
     }
@@ -594,26 +594,26 @@ contract TfiVestingTest is Test {
         vm.stopPrank();
     }
 
-    function testSetVeTfi() external {
-        console.log("Set veTFI");
+    function testSetVeTruf() external {
+        console.log("Set veTRUF");
 
         vm.startPrank(owner);
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit VeTfiSet(alice);
+        emit VeTrufSet(alice);
 
-        vesting.setVeTfi(alice);
+        vesting.setVeTruf(alice);
 
-        assertEq(address(vesting.veTFI()), alice, "veTFI is invalid");
+        assertEq(address(vesting.veTRUF()), alice, "veTRUF is invalid");
 
         vm.stopPrank();
     }
 
-    function testSetVeTfiFailure() external {
+    function testSetVeTrufFailure() external {
         vm.startPrank(owner);
-        console.log("Should revert to set veTFI with zero address");
+        console.log("Should revert to set veTRUF with zero address");
 
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        vesting.setVeTfi(address(0));
+        vesting.setVeTruf(address(0));
 
         vm.stopPrank();
     }
@@ -622,7 +622,7 @@ contract TfiVestingTest is Test {
         console.log("Send multiple transactions through multicall");
 
         vm.startPrank(owner);
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
 
         bytes[] memory payloads = new bytes[](2);
         payloads[0] = abi.encodeWithSignature(
@@ -642,7 +642,7 @@ contract TfiVestingTest is Test {
 
         _validateCategory(0, "Preseed", 1e20, 0, false, 0);
         _validateCategory(1, "Seed", 2e20, 0, true, 0);
-        assertEq(tfiToken.balanceOf(address(vesting)), 3e20, "Balance is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), 3e20, "Balance is invalid");
 
         vm.stopPrank();
     }
@@ -672,7 +672,7 @@ contract TfiVestingTest is Test {
         vesting.claim(alice, categoryId, vestingId, claimAmount);
 
         assertEq(vesting.claimable(categoryId, vestingId, alice), 10, "Claimable amount is invalid");
-        assertEq(tfiToken.balanceOf(alice), claimAmount, "Claimed amount is incorrect");
+        assertEq(trufToken.balanceOf(alice), claimAmount, "Claimed amount is incorrect");
 
         _validateUserVesting(categoryId, vestingId, alice, amount, claimAmount, 0, startTime);
 
@@ -704,7 +704,7 @@ contract TfiVestingTest is Test {
         vesting.claim(carol, categoryId, vestingId, claimAmount);
 
         assertEq(vesting.claimable(categoryId, vestingId, carol), 10, "Claimable amount is invalid");
-        assertEq(tfiToken.balanceOf(carol), claimAmount, "Claimed amount is incorrect");
+        assertEq(trufToken.balanceOf(carol), claimAmount, "Claimed amount is incorrect");
 
         _validateUserVesting(categoryId, vestingId, carol, amount, claimAmount, 0, startTime);
 
@@ -917,7 +917,7 @@ contract TfiVestingTest is Test {
     }
 
     function testStake() external {
-        console.log("Stake vesting to veTFI");
+        console.log("Stake vesting to veTRUF");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -929,7 +929,7 @@ contract TfiVestingTest is Test {
 
         (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
 
-        uint256 tfiBalanceBefore = tfiToken.balanceOf(address(vesting));
+        uint256 trufBalanceBefore = trufToken.balanceOf(address(vesting));
 
         vm.startPrank(alice);
 
@@ -938,10 +938,10 @@ contract TfiVestingTest is Test {
 
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
-        assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount, "Staked amount is invalid");
-        assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore - stakeAmount, "Remaining balance is invalid");
+        assertEq(trufToken.balanceOf(address(veTRUF)), stakeAmount, "Staked amount is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), trufBalanceBefore - stakeAmount, "Remaining balance is invalid");
 
-        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTRUF.lockups(alice, 0);
 
         assertEq(lockupAmount, stakeAmount, "Lockup amount is invalid");
         assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
@@ -1032,7 +1032,7 @@ contract TfiVestingTest is Test {
 
         (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
 
-        uint256 tfiBalanceBefore = tfiToken.balanceOf(address(vesting));
+        uint256 trufBalanceBefore = trufToken.balanceOf(address(vesting));
 
         vm.startPrank(alice);
 
@@ -1043,10 +1043,10 @@ contract TfiVestingTest is Test {
 
         vesting.extendStaking(categoryId, vestingId, extendDuration);
 
-        assertEq(tfiToken.balanceOf(address(veTFI)), stakeAmount, "Staked amount is invalid");
-        assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore - stakeAmount, "Remaining balance is invalid");
+        assertEq(trufToken.balanceOf(address(veTRUF)), stakeAmount, "Staked amount is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), trufBalanceBefore - stakeAmount, "Remaining balance is invalid");
 
-        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTRUF.lockups(alice, 0);
 
         assertEq(lockupAmount, stakeAmount, "Lockup amount is invalid");
         assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
@@ -1075,7 +1075,7 @@ contract TfiVestingTest is Test {
     }
 
     function testUnstake() external {
-        console.log("Unstake from veTFI");
+        console.log("Unstake from veTRUF");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -1091,7 +1091,7 @@ contract TfiVestingTest is Test {
 
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
-        uint256 tfiBalanceBefore = tfiToken.balanceOf(address(vesting));
+        uint256 trufBalanceBefore = trufToken.balanceOf(address(vesting));
 
         vm.warp(block.timestamp + duration + 1);
 
@@ -1100,10 +1100,10 @@ contract TfiVestingTest is Test {
 
         vesting.unstake(categoryId, vestingId);
 
-        assertEq(tfiToken.balanceOf(address(veTFI)), 0, "Staked amount is invalid");
-        assertEq(tfiToken.balanceOf(address(vesting)), tfiBalanceBefore + stakeAmount, "Remaining balance is invalid");
+        assertEq(trufToken.balanceOf(address(veTRUF)), 0, "Staked amount is invalid");
+        assertEq(trufToken.balanceOf(address(vesting)), trufBalanceBefore + stakeAmount, "Remaining balance is invalid");
 
-        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTFI.lockups(alice, 0);
+        (uint128 lockupAmount,,,, bool lockupIsVesting) = veTRUF.lockups(alice, 0);
 
         assertEq(lockupAmount, 0, "Lockup should was not deleted");
         assertEq(lockupIsVesting, false, "Lockup should was not deleted");
@@ -1308,7 +1308,7 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
 
-        uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
+        uint256 vestingBalanceBefore = trufToken.balanceOf(address(vesting));
 
         (string memory _category, uint256 _maxAllocation, uint256 _allocated, bool _adminClaimable,) =
             vesting.categories(categoryId);
@@ -1324,7 +1324,7 @@ contract TfiVestingTest is Test {
         _validateCategory(
             categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable, claimAmount
         );
-        assertEq(tfiToken.balanceOf(address(vesting)), vestingBalanceBefore, "Token does not move after cancel");
+        assertEq(trufToken.balanceOf(address(vesting)), vestingBalanceBefore, "Token does not move after cancel");
 
         vm.stopPrank();
     }
@@ -1356,7 +1356,7 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
 
-        uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
+        uint256 vestingBalanceBefore = trufToken.balanceOf(address(vesting));
 
         (string memory _category, uint256 _maxAllocation, uint256 _allocated, bool _adminClaimable,) =
             vesting.categories(categoryId);
@@ -1378,9 +1378,9 @@ contract TfiVestingTest is Test {
             claimable + claimed
         );
         assertEq(
-            tfiToken.balanceOf(address(vesting)), vestingBalanceBefore - claimable, "Token does not move after cancel"
+            trufToken.balanceOf(address(vesting)), vestingBalanceBefore - claimable, "Token does not move after cancel"
         );
-        assertEq(tfiToken.balanceOf(alice), claimed + claimable, "User should receive unclaimed tokens");
+        assertEq(trufToken.balanceOf(alice), claimed + claimable, "User should receive unclaimed tokens");
 
         vm.stopPrank();
     }
@@ -1415,7 +1415,7 @@ contract TfiVestingTest is Test {
 
         vm.startPrank(owner);
 
-        uint256 vestingBalanceBefore = tfiToken.balanceOf(address(vesting));
+        uint256 vestingBalanceBefore = trufToken.balanceOf(address(vesting));
 
         (string memory _category, uint256 _maxAllocation, uint256 _allocated, bool _adminClaimable,) =
             vesting.categories(categoryId);
@@ -1434,7 +1434,9 @@ contract TfiVestingTest is Test {
             categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable, claimAmount
         );
         assertEq(
-            tfiToken.balanceOf(address(vesting)), vestingBalanceBefore + stakeAmount, "Token does not move after cancel"
+            trufToken.balanceOf(address(vesting)),
+            vestingBalanceBefore + stakeAmount,
+            "Token does not move after cancel"
         );
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 0, "Lockup id should be zero");
 
@@ -1499,15 +1501,15 @@ contract TfiVestingTest is Test {
     function _setupVestingPlan() internal {
         vm.startPrank(owner);
 
-        tfiToken.approve(address(vesting), type(uint256).max);
+        trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 171_400e18, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 391_000e18, false);
         vesting.setVestingCategory(type(uint256).max, "Private", 343_000e18, false);
         vesting.setVestingCategory(type(uint256).max, "Liquidity", 120_000e18, true);
-        vesting.setVestingInfo(0, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
-        vesting.setVestingInfo(1, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
-        vesting.setVestingInfo(2, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
-        vesting.setVestingInfo(3, type(uint256).max, TfiVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
+        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
+        vesting.setVestingInfo(2, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
+        vesting.setVestingInfo(3, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
 
         vm.stopPrank();
     }

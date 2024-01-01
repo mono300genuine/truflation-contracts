@@ -25,12 +25,12 @@ contract TruflationTokenCCIP is ERC677Token, Ownable2Step {
         _;
     }
 
-    constructor() ERC20("Truflation", "TFI") {
+    constructor() ERC20("Truflation", "TRUF") {
         // Do not mint any supply
     }
 
     /**
-     * Mint TFI token on other blockchains
+     * Mint TRUF token on other blockchains
      * @notice Only CCIP Token pool can mint tokens
      * @param account User address to get minted tokens
      * @param amount Token amount to mint
@@ -40,7 +40,7 @@ contract TruflationTokenCCIP is ERC677Token, Ownable2Step {
     }
 
     /**
-     * Burn TFI token of CCIP token pool for CCIP bridge
+     * Burn TRUF token of CCIP token pool for CCIP bridge
      * @notice Only CCIP Token pool can burn tokens
      * @param amount Token amount to burn
      */
