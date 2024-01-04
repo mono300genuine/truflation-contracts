@@ -1498,6 +1498,73 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testClaimableBeforeInitialRelease() external {
+        console.log("Return 0 if current time is before initial release time");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        (, uint64 _initialReleasePeriod,,,) = vesting.vestingInfos(categoryId, vestingId);
+
+        vm.warp(tgeTime + _initialReleasePeriod - 1);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be zero");
+    }
+
+    function testClaimableAfterInitialReleaseBeforeCliff() external {
+        console.log("Return initial release amount if current time is after initial release time and before cliff time");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        (uint64 _initialReleasePct, uint64 _initialReleasePeriod, uint64 _cliff,,) =
+            vesting.vestingInfos(categoryId, vestingId);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff - 1);
+
+        assertEq(
+            vesting.claimable(categoryId, vestingId, alice),
+            amount * _initialReleasePct / vesting.DENOMINATOR(),
+            "Claimable amount should be initial release amount"
+        );
+    }
+
+    function testClaimableAfterCliff() external {
+        console.log("Return vested amount if current time is after cliff");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        (uint64 _initialReleasePct, uint64 _initialReleasePeriod, uint64 _cliff, uint64 _period, uint64 _unit) =
+            vesting.vestingInfos(categoryId, vestingId);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff + _unit * 3 + _unit / 2);
+
+        uint256 initialRelease = amount * _initialReleasePct / vesting.DENOMINATOR();
+        uint256 vestedAmount = (amount - initialRelease) * (_unit * 3) / _period + initialRelease;
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), vestedAmount, "Claimable amount is incorrect");
+    }
+
     function _setupVestingPlan() internal {
         vm.startPrank(owner);
 
@@ -1508,7 +1575,9 @@ contract TrufVestingTest is Test {
         vesting.setVestingCategory(type(uint256).max, "Liquidity", 120_000e18, true);
         vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
         vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
-        vesting.setVestingInfo(2, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
+        vesting.setVestingInfo(
+            2, type(uint256).max, TrufVesting.VestingInfo(500, 10 days, 20 days, 24 * 30 days, 30 days)
+        );
         vesting.setVestingInfo(3, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
 
         vm.stopPrank();
@@ -1520,6 +1589,7 @@ contract TrufVestingTest is Test {
         vesting.setUserVesting(0, 0, alice, 0, 100e18);
         vesting.setUserVesting(0, 0, bob, 0, 200e18);
         vesting.setUserVesting(3, 0, carol, 0, 200e18);
+        vesting.setUserVesting(2, 0, alice, 0, 200e18);
 
         vm.stopPrank();
     }
