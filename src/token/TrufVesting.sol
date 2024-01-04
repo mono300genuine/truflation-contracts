@@ -162,24 +162,28 @@ contract TrufVesting is Ownable {
         returns (uint256 claimableAmount)
     {
         UserVesting memory userVesting = userVestings[categoryId][vestingId][user];
-        if (userVesting.startTime > block.timestamp) {
-            return 0;
-        }
 
         VestingInfo memory info = vestingInfos[categoryId][vestingId];
 
-        uint64 timeElapsed = ((uint64(block.timestamp) - userVesting.startTime) / info.unit) * info.unit;
+        uint64 startTime = userVesting.startTime + info.initialReleasePeriod;
 
-        if (timeElapsed < info.initialReleasePeriod) {
+        if (startTime > block.timestamp) {
             return 0;
         }
 
         uint256 totalAmount = userVesting.amount;
 
         uint256 initialRelease = (totalAmount * info.initialReleasePct) / DENOMINATOR;
-        uint256 vestedAmount = (
-            timeElapsed < info.cliff ? 0 : ((totalAmount - initialRelease) * timeElapsed) / info.period
-        ) + initialRelease;
+
+        startTime += info.cliff;
+
+        if (startTime > block.timestamp) {
+            return initialRelease;
+        }
+
+        uint64 timeElapsed = ((uint64(block.timestamp) - startTime) / info.unit) * info.unit;
+
+        uint256 vestedAmount = ((totalAmount - initialRelease) * timeElapsed) / info.period + initialRelease;
 
         uint256 maxClaimable = userVesting.amount - userVesting.locked;
         if (vestedAmount > maxClaimable) {
@@ -188,9 +192,10 @@ contract TrufVesting is Ownable {
         if (vestedAmount <= userVesting.claimed) {
             return 0;
         }
-        uint256 emissionLeft = getEmission(categoryId) - categories[categoryId].totalClaimed;
 
         claimableAmount = vestedAmount - userVesting.claimed;
+        uint256 emissionLeft = getEmission(categoryId) - categories[categoryId].totalClaimed;
+
         if (claimableAmount > emissionLeft) {
             claimableAmount = emissionLeft;
         }
