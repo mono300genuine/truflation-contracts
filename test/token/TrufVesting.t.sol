@@ -1541,6 +1541,35 @@ contract TrufVestingTest is Test {
         );
     }
 
+    function testClaimableAfterInitialReleaseBeforeCliff2() external {
+        console.log("Subtract locked amount from initial release amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        (uint64 _initialReleasePct, uint64 _initialReleasePeriod, uint64 _cliff,,) =
+            vesting.vestingInfos(categoryId, vestingId);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff - 1);
+
+        uint256 initialRelease = amount * _initialReleasePct / vesting.DENOMINATOR();
+
+        uint256 stakeAmount = amount - initialRelease + 30;
+
+        vm.startPrank(alice);
+        vesting.stake(categoryId, vestingId, stakeAmount, 365 days);
+        vm.stopPrank();
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), initialRelease - 30, "Subtract locked amount");
+    }
+
     function testClaimableAfterCliff() external {
         console.log("Return vested amount if current time is after cliff");
 
