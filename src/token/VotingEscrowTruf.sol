@@ -37,17 +37,13 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     error TooShort();
     error TooLong();
 
-    // 1. Core Storage
-    /// @dev minimum staking duration in seconds
+    /// @dev Minimum staking duration in seconds
     uint256 public immutable minStakeDuration;
-
-    // 2. Staking and Lockup Storage
-    uint256 public constant YEAR_BASE = 18e17;
 
     /// @dev Maximum duration
     uint256 public constant MAX_DURATION = 365 days * 3; // 3 years
 
-    /// @dev lockup list per users
+    /// @dev Lockup list per users
     mapping(address => Lockup[]) public lockups;
 
     /// @dev TRUF token address
@@ -199,7 +195,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
      * @notice Extend lock duration
      *
      * @param lockupId the id of the old lockup to extend
-     * @param duration number of seconds from now to stake for
+     * @param duration number of seconds from current lock ends to stake for
      */
     function extendLock(uint256 lockupId, uint256 duration) external {
         _extendLock(msg.sender, lockupId, duration, false);
