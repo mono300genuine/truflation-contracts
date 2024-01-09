@@ -513,6 +513,8 @@ contract VotingEscrowTrufTest is Test {
         (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
+        assertEq(veTRUF.getVotes(alice), alicePoints + points, "Voting power should be updated");
+
         vm.startPrank(vesting);
 
         vm.expectEmit(true, true, true, true, address(veTRUF));
@@ -526,6 +528,8 @@ contract VotingEscrowTrufTest is Test {
         assertEq(trufStakingRewards.balanceOf(alice), alicePoints, "Stake amount should be reduced");
         assertEq(veTRUF.balanceOf(bob), points, "Points should be minted to new user");
         assertEq(trufStakingRewards.balanceOf(bob), points, "Stake amount should be moved to new user");
+        assertEq(veTRUF.getVotes(alice), alicePoints, "Voting power of old user should be removed");
+        assertEq(veTRUF.getVotes(bob), points, "Voting power should be moved to new user");
 
         _validateLockup(alice, 1, 0, 0, 0, 0, false);
         _validateLockup(bob, 0, amount, duration, ends, points, true);
