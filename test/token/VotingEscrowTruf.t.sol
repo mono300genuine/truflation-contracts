@@ -437,6 +437,15 @@ contract VotingEscrowTrufTest is Test {
         veTRUF.extendVestingLock(alice, 0, extendDuration);
 
         vm.stopPrank();
+
+        console.log("Revert to extend if already ended");
+        vm.warp(block.timestamp + 30 days);
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("AlreadyEnded()"));
+        veTRUF.extendLock(0, extendDuration);
+
+        vm.stopPrank();
     }
 
     function testExtendVestingLock() external {
