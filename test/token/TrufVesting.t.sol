@@ -1402,7 +1402,6 @@ contract TrufVestingTest is Test {
 
         uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
         vesting.claim(alice, categoryId, vestingId, claimAmount);
-        vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -1410,6 +1409,8 @@ contract TrufVestingTest is Test {
         vm.warp(block.timestamp + 30 days);
         uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
         assertNotEq(claimable, 0, "Claimable amount should be non-zero");
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         vm.stopPrank();
 
@@ -1423,19 +1424,20 @@ contract TrufVestingTest is Test {
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit CancelVesting(categoryId, vestingId, alice, false);
+        emit CancelVesting(categoryId, vestingId, alice, true);
 
-        vesting.cancelVesting(categoryId, vestingId, alice, false);
+        vesting.cancelVesting(categoryId, vestingId, alice, true);
 
+        claimed += claimable;
         assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
 
         _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
         _validateCategory(
-            categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable, claimAmount
+            categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable, claimed
         );
         assertEq(
             trufToken.balanceOf(address(vesting)),
-            vestingBalanceBefore + stakeAmount,
+            vestingBalanceBefore + stakeAmount + claimAmount - claimed,
             "Token does not move after cancel"
         );
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 0, "Lockup id should be zero");

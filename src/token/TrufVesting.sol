@@ -349,7 +349,7 @@ contract TrufVesting is Ownable {
         external
         onlyOwner
     {
-        UserVesting memory userVesting = userVestings[categoryId][vestingId][user];
+        UserVesting storage userVesting = userVestings[categoryId][vestingId][user];
 
         if (userVesting.amount == 0) {
             revert UserVestingDoesNotExists(categoryId, vestingId, user);
