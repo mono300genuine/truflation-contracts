@@ -399,15 +399,15 @@ contract TrufVesting is Ownable {
         public
         onlyOwner
     {
-        if (block.timestamp >= tgeTime) {
-            revert VestingStarted(tgeTime);
-        }
         if (maxAllocation == 0) {
             revert ZeroAmount();
         }
 
         int256 tokenMove;
         if (id == type(uint256).max) {
+            if (block.timestamp >= tgeTime) {
+                revert VestingStarted(tgeTime);
+            }
             id = categories.length;
             categories.push(VestingCategory(category, maxAllocation, 0, adminClaimable, 0));
             tokenMove = int256(maxAllocation);
