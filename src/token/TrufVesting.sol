@@ -355,7 +355,11 @@ contract TrufVesting is Ownable {
             revert UserVestingDoesNotExists(categoryId, vestingId, user);
         }
 
-        if (userVesting.startTime + vestingInfos[categoryId][vestingId].period <= block.timestamp) {
+        VestingInfo memory vestingInfo = vestingInfos[categoryId][vestingId];
+        if (
+            userVesting.startTime + vestingInfo.initialReleasePeriod + vestingInfo.cliff + vestingInfo.period
+                <= block.timestamp
+        ) {
             revert AlreadyVested(categoryId, vestingId, user);
         }
 
