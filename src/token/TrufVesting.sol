@@ -73,9 +73,9 @@ contract TrufVesting is Ownable {
         uint256 lockupId
     );
 
-    /// @dev Emitted when user extended veTRUF staking period
+    /// @dev Emitted when user extended veTRUF staking period or increased amount
     event ExtendedStaking(
-        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
     );
 
     /// @dev Emitted when user unstakes from veTRUF
@@ -262,20 +262,32 @@ contract TrufVesting is Ownable {
     }
 
     /**
-     * @notice Extend veTRUF staking period
+     * @notice Extend veTRUF staking period and increase amount
      * @param categoryId category id
      * @param vestingId vesting id
+     * @param amount token amount to increase
      * @param duration lock period from now
      */
-    function extendStaking(uint256 categoryId, uint256 vestingId, uint256 duration) external {
+    function extendStaking(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
             revert LockDoesNotExist();
         }
 
-        veTRUF.extendVestingLock(msg.sender, lockupId - 1, duration);
+        if (amount != 0) {
+            UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
 
-        emit ExtendedStaking(categoryId, vestingId, msg.sender, duration);
+            if (amount > userVesting.amount - userVesting.claimed - userVesting.locked) {
+                revert InvalidAmount();
+            }
+
+            userVesting.locked += amount;
+
+            trufToken.safeIncreaseAllowance(address(veTRUF), amount);
+        }
+        veTRUF.extendVestingLock(msg.sender, lockupId - 1, amount, duration);
+
+        emit ExtendedStaking(categoryId, vestingId, msg.sender, amount, duration);
     }
 
     /**
