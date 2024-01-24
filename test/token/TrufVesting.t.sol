@@ -33,7 +33,7 @@ contract TrufVestingTest is Test {
         uint256 lockupId
     );
     event ExtendedStaking(
-        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
     );
     event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
@@ -1062,7 +1062,7 @@ contract TrufVestingTest is Test {
     }
 
     function testExtendStaking() external {
-        console.log("Extend staking duration");
+        console.log("Extend staking duration and increase amount");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -1072,6 +1072,7 @@ contract TrufVestingTest is Test {
         uint256 stakeAmount = 10e18;
         uint256 duration = 30 days;
         uint256 extendDuration = 50 days;
+        uint256 increaseAmount = 5e18;
 
         (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
 
@@ -1082,19 +1083,23 @@ contract TrufVestingTest is Test {
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit ExtendedStaking(categoryId, vestingId, alice, extendDuration);
+        emit ExtendedStaking(categoryId, vestingId, alice, increaseAmount, extendDuration);
 
-        vesting.extendStaking(categoryId, vestingId, extendDuration);
+        vesting.extendStaking(categoryId, vestingId, increaseAmount, extendDuration);
 
-        assertEq(trufToken.balanceOf(address(veTRUF)), stakeAmount, "Staked amount is invalid");
-        assertEq(trufToken.balanceOf(address(vesting)), trufBalanceBefore - stakeAmount, "Remaining balance is invalid");
+        assertEq(trufToken.balanceOf(address(veTRUF)), stakeAmount + increaseAmount, "Staked amount is invalid");
+        assertEq(
+            trufToken.balanceOf(address(vesting)),
+            trufBalanceBefore - stakeAmount - increaseAmount,
+            "Remaining balance is invalid"
+        );
 
         (uint128 lockupAmount,,,, bool lockupIsVesting) = veTRUF.lockups(alice, 0);
 
-        assertEq(lockupAmount, stakeAmount, "Lockup amount is invalid");
+        assertEq(lockupAmount, stakeAmount + increaseAmount, "Lockup amount is invalid");
         assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
 
-        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount, startTime);
+        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount + increaseAmount, startTime);
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
 
         vm.stopPrank();
@@ -1108,11 +1113,21 @@ contract TrufVestingTest is Test {
 
         uint256 categoryId = 0;
         uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
 
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("LockDoesNotExist()"));
-        vesting.extendStaking(categoryId, vestingId, 30 days);
+        vesting.extendStaking(categoryId, vestingId, 50e18, 30 days);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
+
+        vesting.extendStaking(categoryId, vestingId, amount - stakeAmount + 1, 10 days);
 
         vm.stopPrank();
     }
