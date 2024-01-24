@@ -103,7 +103,8 @@ contract VotingEscrowTrufTest is Test {
         uint256 amount = 100e18;
         uint256 duration = 30 days;
 
-        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.startPrank(alice);
@@ -134,7 +135,8 @@ contract VotingEscrowTrufTest is Test {
 
         uint256 prevBalance = veTRUF.balanceOf(bob);
 
-        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.startPrank(alice);
@@ -192,7 +194,8 @@ contract VotingEscrowTrufTest is Test {
         uint256 amount = 100e18;
         uint256 duration = 30 days;
 
-        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.startPrank(vesting);
@@ -239,7 +242,8 @@ contract VotingEscrowTrufTest is Test {
 
         _stake(amount, duration, alice, bob);
 
-        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.warp(ends);
@@ -267,7 +271,8 @@ contract VotingEscrowTrufTest is Test {
 
         _stake(amount, duration, alice, bob);
 
-        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
         assertNotEq(points, 0, "Points should be non-zero");
 
         console.log("Revert to unstake if trying to unstake as vesting");
@@ -308,7 +313,8 @@ contract VotingEscrowTrufTest is Test {
 
         uint256 prevVestingBal = trufToken.balanceOf(vesting);
 
-        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.warp(ends);
@@ -340,7 +346,7 @@ contract VotingEscrowTrufTest is Test {
 
         uint256 prevVestingBal = trufToken.balanceOf(vesting);
 
-        (uint256 points,) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
         vm.warp(block.timestamp + 10 days);
@@ -383,7 +389,7 @@ contract VotingEscrowTrufTest is Test {
     }
 
     function testExtendLock() external {
-        console.log("Extend duration of lockup");
+        console.log("Extend duration and increase amount of lockup");
 
         uint256 amount = 100e18;
         uint256 duration = 30 days;
@@ -393,27 +399,31 @@ contract VotingEscrowTrufTest is Test {
         vm.warp(block.timestamp + 10 days);
 
         uint256 extendDuration = 60 days;
+        uint256 increaseAmount = 50e18;
 
-        (,, uint128 _ends,,) = veTRUF.lockups(alice, 0);
+        (,, uint128 _ends, uint256 _points,) = veTRUF.lockups(alice, 0);
 
         uint256 newEnds = _ends + extendDuration;
 
-        (uint256 newPoints,) = veTRUF.previewPoints(amount, duration + extendDuration);
-        assertNotEq(newPoints, 0, "Points should be non-zero");
+        uint256 mintAmount =
+            veTRUF.previewPoints(amount, extendDuration) + veTRUF.previewPoints(increaseAmount, 80 days);
+        assertNotEq(mintAmount, 0, "Points should be non-zero");
+
+        uint256 newPoints = _points + mintAmount;
 
         vm.startPrank(alice);
 
         vm.expectEmit(true, true, true, true, address(veTRUF));
-        emit Stake(alice, false, 0, amount, newEnds, newPoints);
+        emit Stake(alice, false, 0, amount + increaseAmount, newEnds, newPoints);
 
-        veTRUF.extendLock(0, extendDuration);
+        veTRUF.extendLock(0, increaseAmount, extendDuration);
 
         vm.stopPrank();
 
         assertEq(veTRUF.balanceOf(alice), newPoints, "Mint increased points to alice");
         assertEq(trufStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
 
-        _validateLockup(alice, 0, amount, duration + extendDuration, newEnds, newPoints, false);
+        _validateLockup(alice, 0, amount + increaseAmount, duration + extendDuration, newEnds, newPoints, false);
     }
 
     function testExtendLockFailures() external {
@@ -422,8 +432,15 @@ contract VotingEscrowTrufTest is Test {
 
         _stake(amount, duration, alice, alice);
 
-        (uint256 points,) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
+
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("TooLong()"));
+        veTRUF.extendLock(0, 100e18, 365 days * 3 - 20 days);
+
+        vm.stopPrank();
 
         uint256 extendDuration = 60 days;
 
@@ -434,7 +451,16 @@ contract VotingEscrowTrufTest is Test {
         vm.startPrank(vesting);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTRUF.extendVestingLock(alice, 0, extendDuration);
+        veTRUF.extendVestingLock(alice, 0, 100e18, extendDuration);
+
+        vm.stopPrank();
+
+        console.log("Revert to extend if already ended");
+        vm.warp(block.timestamp + 30 days);
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("AlreadyEnded()"));
+        veTRUF.extendLock(0, 0, extendDuration);
 
         vm.stopPrank();
     }
@@ -447,31 +473,34 @@ contract VotingEscrowTrufTest is Test {
 
         _stakeVesting(amount, duration, alice);
 
-        (,, uint128 _ends,,) = veTRUF.lockups(alice, 0);
+        (,, uint128 _ends, uint256 _points,) = veTRUF.lockups(alice, 0);
 
         vm.warp(block.timestamp + 10 days);
 
         uint256 extendDuration = 60 days;
+        uint256 increaseAmount = 50e18;
 
         uint256 newEnds = _ends + extendDuration;
-        uint256 newDuration = duration + extendDuration;
 
-        (uint256 newPoints,) = veTRUF.previewPoints(amount, newDuration);
-        assertNotEq(newPoints, 0, "Points should be non-zero");
+        uint256 mintAmount =
+            veTRUF.previewPoints(amount, extendDuration) + veTRUF.previewPoints(increaseAmount, 80 days);
+        assertNotEq(mintAmount, 0, "Points should be non-zero");
+
+        uint256 newPoints = _points + mintAmount;
 
         vm.startPrank(vesting);
 
         vm.expectEmit(true, true, true, true, address(veTRUF));
-        emit Stake(alice, true, 0, amount, newEnds, newPoints);
+        emit Stake(alice, true, 0, amount + increaseAmount, newEnds, newPoints);
 
-        veTRUF.extendVestingLock(alice, 0, extendDuration);
+        veTRUF.extendVestingLock(alice, 0, increaseAmount, extendDuration);
 
         vm.stopPrank();
 
         assertEq(veTRUF.balanceOf(alice), newPoints, "Mint increased points to alice");
         assertEq(trufStakingRewards.balanceOf(alice), newPoints, "Stake increased points to staking rewards");
 
-        _validateLockup(alice, 0, amount, duration + extendDuration, newEnds, newPoints, true);
+        _validateLockup(alice, 0, amount + increaseAmount, duration + extendDuration, newEnds, newPoints, true);
     }
 
     function testExtendVestingLockFailures() external {
@@ -487,11 +516,11 @@ contract VotingEscrowTrufTest is Test {
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("NoAccess()"));
-        veTRUF.extendLock(0, duration);
+        veTRUF.extendLock(0, 50e18, duration);
 
         console.log("Revert if msg.sender is not vesting");
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-        veTRUF.extendVestingLock(alice, 0, duration);
+        veTRUF.extendVestingLock(alice, 0, 50e18, duration);
 
         vm.stopPrank();
     }
@@ -508,10 +537,17 @@ contract VotingEscrowTrufTest is Test {
         _stake(aliceAmount, aliceDuration, alice, alice);
         _stakeVesting(amount, duration, alice);
 
-        (uint256 alicePoints,) = veTRUF.previewPoints(aliceAmount, aliceDuration);
+        uint256 alicePoints = veTRUF.previewPoints(aliceAmount, aliceDuration);
 
-        (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
         assertNotEq(points, 0, "Points should be non-zero");
+
+        assertEq(veTRUF.getVotes(alice), alicePoints + points, "Voting power should be updated");
+        vm.warp(block.timestamp + 10 days);
+
+        uint256 reward = trufStakingRewards.earned(alice);
+        assertNotEq(reward, 0, "Rewards should be non-zero");
 
         vm.startPrank(vesting);
 
@@ -526,6 +562,10 @@ contract VotingEscrowTrufTest is Test {
         assertEq(trufStakingRewards.balanceOf(alice), alicePoints, "Stake amount should be reduced");
         assertEq(veTRUF.balanceOf(bob), points, "Points should be minted to new user");
         assertEq(trufStakingRewards.balanceOf(bob), points, "Stake amount should be moved to new user");
+        assertEq(veTRUF.getVotes(alice), alicePoints, "Voting power of old user should be removed");
+        assertEq(veTRUF.getVotes(bob), points, "Voting power should be moved to new user");
+        assertEq(trufStakingRewards.earned(alice), 0, "Reset old users reward");
+        assertEq(trufToken.balanceOf(bob), reward, "Reward should be paid to new user");
 
         _validateLockup(alice, 1, 0, 0, 0, 0, false);
         _validateLockup(bob, 0, amount, duration, ends, points, true);
@@ -595,8 +635,7 @@ contract VotingEscrowTrufTest is Test {
         console.log("Return valid points and ends");
         uint256 duration = 60 days;
         uint256 amount = 100e18;
-        (uint256 points, uint256 _ends) = veTRUF.previewPoints(amount, duration);
-        assertEq(_ends, block.timestamp + duration, "Invalid ends");
+        uint256 points = veTRUF.previewPoints(amount, duration);
         assertEq(points, (amount * duration) / (365 days * 3), "Invalid points");
     }
 

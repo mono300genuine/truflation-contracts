@@ -9,7 +9,7 @@ import "./ERC677Token.sol";
  * @notice ERC677 Token like LINK token
  *      name: Truflation
  *      symbol: TRUF
- *      total supply: 100,000,000 TRUF
+ *      total supply: 1,000,000,000 TRUF
  */
 contract TruflationToken is ERC677Token {
     constructor() ERC20("Truflation", "TRUF") {
