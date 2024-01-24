@@ -36,6 +36,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     error NotMigrate();
     error TooShort();
     error TooLong();
+    error AlreadyEnded();
 
     // 1. Core Storage
     /// @dev minimum staking duration in seconds
@@ -335,6 +336,10 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
         Lockup memory lockup = lockups[user][lockupId];
         if (lockup.isVesting != isVesting) {
             revert NoAccess();
+        }
+
+        if (lockup.end <= block.timestamp) {
+            revert AlreadyEnded();
         }
 
         uint256 amount = lockup.amount;
