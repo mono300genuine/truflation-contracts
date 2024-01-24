@@ -355,7 +355,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
             revert TooLong();
         }
 
-        uint256 mintAmount = previewPoints(oldAmount, duration) + previewPoints(_amount, newEnd - block.timestamp);
+        uint256 mintAmount = ((oldAmount * duration) + (_amount * (newEnd - block.timestamp))) / MAX_DURATION;
 
         if (mintAmount == 0) {
             revert NotIncrease();

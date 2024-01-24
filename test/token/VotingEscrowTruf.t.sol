@@ -406,7 +406,8 @@ contract VotingEscrowTrufTest is Test {
         uint256 newEnds = _ends + extendDuration;
 
         uint256 mintAmount =
-            veTRUF.previewPoints(amount, extendDuration) + veTRUF.previewPoints(increaseAmount, 80 days);
+            ((amount * extendDuration) + (increaseAmount * (newEnds - block.timestamp))) / veTRUF.MAX_DURATION();
+
         assertNotEq(mintAmount, 0, "Points should be non-zero");
 
         uint256 newPoints = _points + mintAmount;
@@ -482,8 +483,8 @@ contract VotingEscrowTrufTest is Test {
 
         uint256 newEnds = _ends + extendDuration;
 
-        uint256 mintAmount =
-            veTRUF.previewPoints(amount, extendDuration) + veTRUF.previewPoints(increaseAmount, 80 days);
+        uint256 mintAmount = ((amount * extendDuration) + (increaseAmount * 80 days)) / veTRUF.MAX_DURATION();
+
         assertNotEq(mintAmount, 0, "Points should be non-zero");
 
         uint256 newPoints = _points + mintAmount;
