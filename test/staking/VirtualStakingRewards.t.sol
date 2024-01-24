@@ -335,9 +335,9 @@ contract VirtualStakingRewardsTest is Test {
 
         uint256 reward = trufStakingRewards.earned(alice);
         vm.expectEmit(true, true, true, true, address(trufStakingRewards));
-        emit RewardPaid(alice, reward);
+        emit RewardPaid(alice, bob, reward);
 
-        trufStakingRewards.getReward(alice);
+        trufStakingRewards.getReward(alice, bob);
 
         // Validate supply and balance
         assertEq(trufStakingRewards.totalSupply(), stakeAmount, "Total supply is invalid");
@@ -352,7 +352,7 @@ contract VirtualStakingRewardsTest is Test {
             "UserRewardPerTokenPaid was not updated"
         );
 
-        assertEq(trufToken.balanceOf(alice), reward, "Received reward is invalid");
+        assertEq(trufToken.balanceOf(bob), reward, "Received reward is invalid");
 
         vm.stopPrank();
     }
@@ -362,70 +362,20 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.startPrank(operator);
 
-        trufStakingRewards.getReward(alice);
+        trufStakingRewards.getReward(alice, alice);
 
         assertEq(trufToken.balanceOf(alice), 0, "Reward should be zero");
 
         vm.stopPrank();
     }
 
-    function testExit() external {
-        console.log("Exit from staking(withdraw all balance, and claim reward)");
-
-        uint256 rewardAmount = 100e18;
-        _notifyReward(rewardAmount);
-
-        uint256 stakeAmount = 10e18;
-
-        _stake(alice, stakeAmount);
-        vm.startPrank(operator);
-
-        vm.warp(block.timestamp + 3 days);
-
-        uint256 reward = trufStakingRewards.earned(alice);
-
-        trufStakingRewards.exit(alice);
-
-        // Validate supply and balance
-        assertEq(trufStakingRewards.totalSupply(), 0, "Total supply is invalid");
-        assertEq(trufStakingRewards.balanceOf(alice), 0, "Balance is invalid");
-
-        // Validate rewards updates
-        assertEq(trufStakingRewards.lastUpdateTime(), block.timestamp, "Last updated time is invalid");
-        assertEq(trufStakingRewards.rewards(alice), 0, "Reward was not updated");
-        assertEq(
-            trufStakingRewards.userRewardPerTokenPaid(alice),
-            trufStakingRewards.rewardPerTokenStored(),
-            "UserRewardPerTokenPaid was not updated"
-        );
-
-        assertEq(trufToken.balanceOf(alice), reward, "Received reward is invalid");
+    function testGetRewardFailure() external {
+        console.log("Should revert when sender is not operator");
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", owner));
+        trufStakingRewards.getReward(alice, alice);
 
         vm.stopPrank();
-    }
-
-    function testExit_WhenEmptyBalance() external {
-        console.log("Exit when balance is empty");
-
-        uint256 rewardAmount = 100e18;
-        _notifyReward(rewardAmount);
-
-        uint256 stakeAmount = 10e18;
-
-        _stake(alice, stakeAmount);
-
-        vm.warp(block.timestamp + 3 days);
-
-        _withdraw(alice, stakeAmount);
-
-        uint256 reward = trufStakingRewards.earned(alice);
-
-        assertEq(trufStakingRewards.rewards(alice), reward, "Reward was not updated");
-
-        trufStakingRewards.exit(alice);
-        assertEq(trufStakingRewards.rewards(alice), 0, "Reward was not updated");
-
-        assertEq(trufToken.balanceOf(alice), reward, "Received reward is invalid");
     }
 
     function testNotifyRewardAmount() external {
@@ -582,7 +532,7 @@ contract VirtualStakingRewardsTest is Test {
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
-    event RewardPaid(address indexed user, uint256 reward);
+    event RewardPaid(address indexed user, address indexed to, uint256 reward);
     event RewardsDurationUpdated(uint256 newDuration);
     event RewardsDistributionUpdated(address indexed rewardsDistribution);
     event OperatorUpdated(address indexed operator);

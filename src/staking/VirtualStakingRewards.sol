@@ -123,20 +123,13 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
         emit Withdrawn(user, amount);
     }
 
-    function getReward(address user) public updateReward(user) returns (uint256 reward) {
+    function getReward(address user, address to) public updateReward(user) onlyOperator returns (uint256 reward) {
         reward = rewards[user];
         if (reward != 0) {
             rewards[user] = 0;
-            IERC20(rewardsToken).safeTransfer(user, reward);
-            emit RewardPaid(user, reward);
+            IERC20(rewardsToken).safeTransfer(to, reward);
+            emit RewardPaid(user, to, reward);
         }
-    }
-
-    function exit(address user) external {
-        if (_balances[user] != 0) {
-            withdraw(user, _balances[user]);
-        }
-        getReward(user);
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
@@ -199,7 +192,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
-    event RewardPaid(address indexed user, uint256 reward);
+    event RewardPaid(address indexed user, address indexed to, uint256 reward);
     event RewardsDurationUpdated(uint256 newDuration);
     event RewardsDistributionUpdated(address indexed rewardsDistribution);
     event OperatorUpdated(address indexed operator);

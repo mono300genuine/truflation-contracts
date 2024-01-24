@@ -240,6 +240,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         uint256 points = oldLockup.points;
         stakingRewards.withdraw(oldUser, points);
+        stakingRewards.getReward(oldUser, newUser);
         _burn(oldUser, points);
 
         newLockupId = lockups[newUser].length;
@@ -256,7 +257,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
      * @notice Claim TRUF staking rewards
      */
     function claimReward() external {
-        stakingRewards.getReward(msg.sender);
+        stakingRewards.getReward(msg.sender, msg.sender);
     }
 
     /**
