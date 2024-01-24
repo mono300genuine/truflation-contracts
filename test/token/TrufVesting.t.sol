@@ -800,6 +800,38 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testClaim_Revert_Claim2Times_BeforeCliff() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (, uint64 _initialReleasePeriod, uint64 _cliff,,) = vesting.vestingInfos(categoryId, vestingId);
+
+        assertNotEq(_initialReleasePeriod, 0, "InitialReleasePeriod should not be zero");
+        assertNotEq(_cliff, 0, "Cliff should not be zero");
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        vm.startPrank(alice);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff / 3);
+
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should not be zero");
+
+        vesting.claim(alice, categoryId, vestingId, claimable);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff / 3 * 2);
+
+        console.log("Should revert to claim again before cliff");
+        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
+
+        vesting.claim(alice, categoryId, vestingId, 0);
+        vm.stopPrank();
+    }
+
     function testGetEmission_Returns_ZeroBeforeTGE() external {
         _setupVestingPlan();
         _setupExampleUserVestings();
