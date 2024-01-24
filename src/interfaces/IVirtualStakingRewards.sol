@@ -22,9 +22,7 @@ interface IVirtualStakingRewards {
 
     // Mutative
 
-    function exit(address user) external;
-
-    function getReward(address user) external returns (uint256);
+    function getReward(address user, address to) external returns (uint256);
 
     function stake(address user, uint256 amount) external;
 

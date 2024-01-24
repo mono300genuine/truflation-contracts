@@ -38,17 +38,13 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     error TooLong();
     error AlreadyEnded();
 
-    // 1. Core Storage
-    /// @dev minimum staking duration in seconds
+    /// @dev Minimum staking duration in seconds
     uint256 public immutable minStakeDuration;
-
-    // 2. Staking and Lockup Storage
-    uint256 public constant YEAR_BASE = 18e17;
 
     /// @dev Maximum duration
     uint256 public constant MAX_DURATION = 365 days * 3; // 3 years
 
-    /// @dev lockup list per users
+    /// @dev Lockup list per users
     mapping(address => Lockup[]) public lockups;
 
     /// @dev TRUF token address
@@ -245,6 +241,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         uint256 points = oldLockup.points;
         stakingRewards.withdraw(oldUser, points);
+        stakingRewards.getReward(oldUser, newUser);
         _burn(oldUser, points);
 
         newLockupId = lockups[newUser].length;
@@ -254,6 +251,11 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         delete lockups[oldUser][lockupId];
 
+        if (delegates(newUser) == address(0)) {
+            // Delegate voting power to the new user, if unregistered
+            _delegate(newUser, newUser);
+        }
+
         emit Migrated(oldUser, newUser, lockupId, newLockupId);
     }
 
@@ -261,7 +263,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
      * @notice Claim TRUF staking rewards
      */
     function claimReward() external {
-        stakingRewards.getReward(msg.sender);
+        stakingRewards.getReward(msg.sender, msg.sender);
     }
 
     /**
