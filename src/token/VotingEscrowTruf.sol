@@ -246,6 +246,11 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         delete lockups[oldUser][lockupId];
 
+        if (delegates(newUser) == address(0)) {
+            // Delegate voting power to the new user, if unregistered
+            _delegate(newUser, newUser);
+        }
+
         emit Migrated(oldUser, newUser, lockupId, newLockupId);
     }
 

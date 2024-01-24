@@ -522,6 +522,7 @@ contract VotingEscrowTrufTest is Test {
         (uint256 points, uint256 ends) = veTRUF.previewPoints(amount, duration);
         assertNotEq(points, 0, "Points should be non-zero");
 
+        assertEq(veTRUF.getVotes(alice), alicePoints + points, "Voting power should be updated");
         vm.warp(block.timestamp + 10 days);
 
         uint256 reward = trufStakingRewards.earned(alice);
@@ -540,6 +541,8 @@ contract VotingEscrowTrufTest is Test {
         assertEq(trufStakingRewards.balanceOf(alice), alicePoints, "Stake amount should be reduced");
         assertEq(veTRUF.balanceOf(bob), points, "Points should be minted to new user");
         assertEq(trufStakingRewards.balanceOf(bob), points, "Stake amount should be moved to new user");
+        assertEq(veTRUF.getVotes(alice), alicePoints, "Voting power of old user should be removed");
+        assertEq(veTRUF.getVotes(bob), points, "Voting power should be moved to new user");
         assertEq(trufStakingRewards.earned(alice), 0, "Reset old users reward");
         assertEq(trufToken.balanceOf(bob), reward, "Reward should be paid to new user");
 
