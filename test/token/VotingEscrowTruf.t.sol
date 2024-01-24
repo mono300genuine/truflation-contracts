@@ -437,6 +437,15 @@ contract VotingEscrowTrufTest is Test {
         veTRUF.extendVestingLock(alice, 0, extendDuration);
 
         vm.stopPrank();
+
+        console.log("Revert to extend if already ended");
+        vm.warp(block.timestamp + 30 days);
+        vm.startPrank(alice);
+
+        vm.expectRevert(abi.encodeWithSignature("AlreadyEnded()"));
+        veTRUF.extendLock(0, extendDuration);
+
+        vm.stopPrank();
     }
 
     function testExtendVestingLock() external {
@@ -514,6 +523,10 @@ contract VotingEscrowTrufTest is Test {
         assertNotEq(points, 0, "Points should be non-zero");
 
         assertEq(veTRUF.getVotes(alice), alicePoints + points, "Voting power should be updated");
+        vm.warp(block.timestamp + 10 days);
+
+        uint256 reward = trufStakingRewards.earned(alice);
+        assertNotEq(reward, 0, "Rewards should be non-zero");
 
         vm.startPrank(vesting);
 
@@ -530,6 +543,8 @@ contract VotingEscrowTrufTest is Test {
         assertEq(trufStakingRewards.balanceOf(bob), points, "Stake amount should be moved to new user");
         assertEq(veTRUF.getVotes(alice), alicePoints, "Voting power of old user should be removed");
         assertEq(veTRUF.getVotes(bob), points, "Voting power should be moved to new user");
+        assertEq(trufStakingRewards.earned(alice), 0, "Reset old users reward");
+        assertEq(trufToken.balanceOf(bob), reward, "Reward should be paid to new user");
 
         _validateLockup(alice, 1, 0, 0, 0, 0, false);
         _validateLockup(bob, 0, amount, duration, ends, points, true);
