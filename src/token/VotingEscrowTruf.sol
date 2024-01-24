@@ -36,6 +36,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     error NotMigrate();
     error TooShort();
     error TooLong();
+    error AlreadyEnded();
 
     // 1. Core Storage
     /// @dev minimum staking duration in seconds
@@ -239,6 +240,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         uint256 points = oldLockup.points;
         stakingRewards.withdraw(oldUser, points);
+        stakingRewards.getReward(oldUser, newUser);
         _burn(oldUser, points);
 
         newLockupId = lockups[newUser].length;
@@ -255,7 +257,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
      * @notice Claim TRUF staking rewards
      */
     function claimReward() external {
-        stakingRewards.getReward(msg.sender);
+        stakingRewards.getReward(msg.sender, msg.sender);
     }
 
     /**
@@ -335,6 +337,10 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
         Lockup memory lockup = lockups[user][lockupId];
         if (lockup.isVesting != isVesting) {
             revert NoAccess();
+        }
+
+        if (lockup.end <= block.timestamp) {
+            revert AlreadyEnded();
         }
 
         uint256 amount = lockup.amount;
