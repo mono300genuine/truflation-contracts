@@ -800,6 +800,38 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testClaim_Revert_Claim2Times_BeforeCliff() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (, uint64 _initialReleasePeriod, uint64 _cliff,,) = vesting.vestingInfos(categoryId, vestingId);
+
+        assertNotEq(_initialReleasePeriod, 0, "InitialReleasePeriod should not be zero");
+        assertNotEq(_cliff, 0, "Cliff should not be zero");
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        vm.startPrank(alice);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff / 3);
+
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should not be zero");
+
+        vesting.claim(alice, categoryId, vestingId, claimable);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff / 3 * 2);
+
+        console.log("Should revert to claim again before cliff");
+        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
+
+        vesting.claim(alice, categoryId, vestingId, 0);
+        vm.stopPrank();
+    }
+
     function testGetEmission_Returns_ZeroBeforeTGE() external {
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -1580,6 +1612,35 @@ contract TrufVestingTest is Test {
             amount * _initialReleasePct / vesting.DENOMINATOR(),
             "Claimable amount should be initial release amount"
         );
+    }
+
+    function testClaimableAfterInitialReleaseBeforeCliff2() external {
+        console.log("Subtract locked amount from initial release amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        (uint64 _initialReleasePct, uint64 _initialReleasePeriod, uint64 _cliff,,) =
+            vesting.vestingInfos(categoryId, vestingId);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff - 1);
+
+        uint256 initialRelease = amount * _initialReleasePct / vesting.DENOMINATOR();
+
+        uint256 stakeAmount = amount - initialRelease + 30;
+
+        vm.startPrank(alice);
+        vesting.stake(categoryId, vestingId, stakeAmount, 365 days);
+        vm.stopPrank();
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), initialRelease - 30, "Subtract locked amount");
     }
 
     function testClaimableAfterCliff() external {

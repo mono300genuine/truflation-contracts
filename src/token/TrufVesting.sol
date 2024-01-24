@@ -190,13 +190,15 @@ contract TrufVesting is Ownable {
 
         startTime += info.cliff;
 
+        uint256 vestedAmount;
+
         if (startTime > block.timestamp) {
-            return initialRelease;
+            vestedAmount = initialRelease;
+        } else {
+            uint64 timeElapsed = ((uint64(block.timestamp) - startTime) / info.unit) * info.unit;
+
+            vestedAmount = ((totalAmount - initialRelease) * timeElapsed) / info.period + initialRelease;
         }
-
-        uint64 timeElapsed = ((uint64(block.timestamp) - startTime) / info.unit) * info.unit;
-
-        uint256 vestedAmount = ((totalAmount - initialRelease) * timeElapsed) / info.period + initialRelease;
 
         uint256 maxClaimable = userVesting.amount - userVesting.locked;
         if (vestedAmount > maxClaimable) {
