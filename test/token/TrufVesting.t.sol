@@ -21,6 +21,7 @@ contract TrufVestingTest is Test {
     event CancelVesting(
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, bool giveUnclaimed
     );
+    event AdminSet(address indexed admin, bool indexed flag);
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
     event VeTrufSet(address indexed veTRUF);
     event Staked(
@@ -32,7 +33,7 @@ contract TrufVestingTest is Test {
         uint256 lockupId
     );
     event ExtendedStaking(
-        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
     );
     event Unstaked(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
@@ -46,27 +47,31 @@ contract TrufVestingTest is Test {
     address public bob;
     address public carol;
     address public owner;
+    address public admin;
 
     function setUp() public {
         alice = address(uint160(uint256(keccak256(abi.encodePacked("Alice")))));
         bob = address(uint160(uint256(keccak256(abi.encodePacked("Bob")))));
         carol = address(uint160(uint256(keccak256(abi.encodePacked("Carol")))));
         owner = address(uint160(uint256(keccak256(abi.encodePacked("Owner")))));
+        admin = address(uint160(uint256(keccak256(abi.encodePacked("Admin")))));
 
         vm.label(alice, "Alice");
         vm.label(bob, "Bob");
         vm.label(carol, "Carol");
         vm.label(owner, "Owner");
+        vm.label(admin, "Admin");
 
         vm.warp(1696816730);
 
         vm.startPrank(owner);
         trufToken = new TruflationToken();
         vesting = new TrufVesting(trufToken, uint64(block.timestamp) + 1 days);
-        trufStakingRewards = new VirtualStakingRewards(owner, address(trufToken));
+        trufStakingRewards = new VirtualStakingRewards(admin, address(trufToken));
         veTRUF = new VotingEscrowTruf(address(trufToken), address(vesting), 1 hours, address(trufStakingRewards));
         trufStakingRewards.setOperator(address(veTRUF));
         vesting.setVeTruf(address(veTRUF));
+        vesting.setAdmin(admin, true);
 
         vm.stopPrank();
     }
@@ -158,9 +163,16 @@ contract TrufVestingTest is Test {
         trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
+
+        vm.stopPrank();
+        vm.startPrank(admin);
+
         vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
+
+        vm.stopPrank();
+        vm.startPrank(owner);
 
         uint256 ownerTrufBalance = trufToken.balanceOf(owner);
 
@@ -186,9 +198,16 @@ contract TrufVestingTest is Test {
         trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
+
+        vm.stopPrank();
+        vm.startPrank(admin);
+
         vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
+
+        vm.stopPrank();
+        vm.startPrank(owner);
 
         uint256 ownerTrufBalance = trufToken.balanceOf(owner);
 
@@ -213,9 +232,16 @@ contract TrufVestingTest is Test {
         trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
         vesting.setVestingCategory(type(uint256).max, "Seed", 1e15, false);
+
+        vm.stopPrank();
+        vm.startPrank(admin);
+
         vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
+
+        vm.stopPrank();
+        vm.startPrank(owner);
 
         vm.expectRevert(abi.encodeWithSignature("MaxAllocationExceed()"));
         vesting.setVestingCategory(1, "Private", maxAllocation, false);
@@ -224,7 +250,7 @@ contract TrufVestingTest is Test {
     }
 
     function testSetVestingCategory_Revert_WhenSenderIsNotOwner() external {
-        console.log("Should revert when sender is not owner");
+        console.log("Should revert when sender is not admin");
 
         vm.startPrank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
@@ -244,7 +270,7 @@ contract TrufVestingTest is Test {
     }
 
     function testSetVestingCategory_AfterTge() external {
-        console.log("Should revert when sender is not owner");
+        console.log("Should revert when sender is not admin");
 
         uint64 tgeTime = vesting.tgeTime();
 
@@ -313,7 +339,7 @@ contract TrufVestingTest is Test {
     }
 
     function testSetEmissionSchedule_Revert_WhenSenderIsNotOwner() external {
-        console.log("Should revert when sender is not owner");
+        console.log("Should revert when sender is not admin");
 
         uint256 maxAllocation = 1e20;
 
@@ -390,6 +416,10 @@ contract TrufVestingTest is Test {
         trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
 
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+
         vm.expectEmit(true, true, true, true, address(vesting));
         emit VestingInfoSet(0, 0, TrufVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
         vesting.setVestingInfo(
@@ -412,6 +442,11 @@ contract TrufVestingTest is Test {
         vm.startPrank(owner);
         trufToken.approve(address(vesting), type(uint256).max);
         vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+
         vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
 
         vm.expectEmit(true, true, true, true, address(vesting));
@@ -425,7 +460,7 @@ contract TrufVestingTest is Test {
     }
 
     function testSetVestingInfo_Revert_WhenSenderIsNotOwner() external {
-        console.log("Should revert when sender is not owner");
+        console.log("Should revert when sender is not admin");
 
         vm.startPrank(owner);
         trufToken.approve(address(vesting), type(uint256).max);
@@ -433,7 +468,7 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
         vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
 
         vm.stopPrank();
@@ -446,7 +481,7 @@ contract TrufVestingTest is Test {
 
         uint256 amount = 100e18;
         uint64 tgeTime = vesting.tgeTime();
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit UserVestingSet(1, 0, alice, amount, tgeTime);
@@ -467,7 +502,7 @@ contract TrufVestingTest is Test {
 
         uint256 amount = 100e18;
         uint256 categoryId = 4;
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectRevert(abi.encodeWithSignature("InvalidVestingCategory(uint256)", categoryId));
         vesting.setUserVesting(categoryId, 0, alice, 0, amount);
@@ -483,7 +518,7 @@ contract TrufVestingTest is Test {
         uint256 amount = 100e18;
         uint256 categoryId = 0;
         uint256 vestingId = 4;
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectRevert(abi.encodeWithSignature("InvalidVestingInfo(uint256,uint256)", categoryId, vestingId));
         vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
@@ -502,7 +537,7 @@ contract TrufVestingTest is Test {
 
         (, uint256 maxAllocation,,,) = vesting.categories(categoryId);
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
         vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
 
         vm.expectRevert(abi.encodeWithSignature("MaxAllocationExceed()"));
@@ -520,7 +555,7 @@ contract TrufVestingTest is Test {
         uint256 categoryId = 0;
         uint256 vestingId = 0;
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
 
@@ -538,7 +573,7 @@ contract TrufVestingTest is Test {
 
         vm.stopPrank();
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
         vm.expectRevert(abi.encodeWithSignature("InvalidUserVesting()"));
         vesting.setUserVesting(categoryId, vestingId, alice, 0, claimed - 1);
 
@@ -556,7 +591,7 @@ contract TrufVestingTest is Test {
 
         uint64 tgeTime = vesting.tgeTime();
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
         vm.expectRevert(abi.encodeWithSignature("InvalidTimestamp()"));
         vesting.setUserVesting(categoryId, vestingId, alice, tgeTime - 1, amount);
 
@@ -564,7 +599,7 @@ contract TrufVestingTest is Test {
     }
 
     function testSetUserVesting_Revert_WhenSenderIsNotOwner() external {
-        console.log("Should revert to set user vesting when msg.sender is not owner");
+        console.log("Should revert to set user vesting when msg.sender is not admin");
 
         _setupVestingPlan();
 
@@ -573,7 +608,7 @@ contract TrufVestingTest is Test {
         uint256 vestingId = 0;
 
         vm.startPrank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
         vesting.setUserVesting(categoryId, vestingId, alice, 0, amount);
 
         vm.stopPrank();
@@ -587,7 +622,7 @@ contract TrufVestingTest is Test {
         uint256 categoryId = 0;
         uint256 vestingId = 0;
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
         vesting.setUserVesting(categoryId, vestingId, alice, 0, 0);
 
@@ -609,6 +644,14 @@ contract TrufVestingTest is Test {
     }
 
     function testSetVeTrufFailure() external {
+        vm.startPrank(admin);
+        console.log("Should revert if msg.sender is not owner");
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        vesting.setVeTruf(alice);
+
+        vm.stopPrank();
+
         vm.startPrank(owner);
         console.log("Should revert to set veTRUF with zero address");
 
@@ -696,7 +739,7 @@ contract TrufVestingTest is Test {
         uint256 claimAmount = claimable - 10;
         assertNotEq(vesting.claimable(categoryId, vestingId, carol), 0, "Claimable amount should be non-zero");
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit Claimed(categoryId, vestingId, carol, claimAmount);
@@ -737,7 +780,7 @@ contract TrufVestingTest is Test {
 
         vesting.claim(alice, categoryId, vestingId, 1);
 
-        console.log("Should revert to claim if msg.sender is not user or owner for admin-claimable");
+        console.log("Should revert to claim if msg.sender is not user or admin for admin-claimable");
         (,,, _adminClaimable,) = vesting.categories(3);
         assertEq(_adminClaimable, true, "Not admin claimable");
 
@@ -754,6 +797,38 @@ contract TrufVestingTest is Test {
 
         vesting.claim(alice, categoryId, vestingId, 1);
 
+        vm.stopPrank();
+    }
+
+    function testClaim_Revert_Claim2Times_BeforeCliff() external {
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (, uint64 _initialReleasePeriod, uint64 _cliff,,) = vesting.vestingInfos(categoryId, vestingId);
+
+        assertNotEq(_initialReleasePeriod, 0, "InitialReleasePeriod should not be zero");
+        assertNotEq(_cliff, 0, "Cliff should not be zero");
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        vm.startPrank(alice);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff / 3);
+
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should not be zero");
+
+        vesting.claim(alice, categoryId, vestingId, claimable);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff / 3 * 2);
+
+        console.log("Should revert to claim again before cliff");
+        vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
+
+        vesting.claim(alice, categoryId, vestingId, 0);
         vm.stopPrank();
     }
 
@@ -1019,7 +1094,7 @@ contract TrufVestingTest is Test {
     }
 
     function testExtendStaking() external {
-        console.log("Extend staking duration");
+        console.log("Extend staking duration and increase amount");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -1029,6 +1104,7 @@ contract TrufVestingTest is Test {
         uint256 stakeAmount = 10e18;
         uint256 duration = 30 days;
         uint256 extendDuration = 50 days;
+        uint256 increaseAmount = 5e18;
 
         (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
 
@@ -1039,19 +1115,23 @@ contract TrufVestingTest is Test {
         vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit ExtendedStaking(categoryId, vestingId, alice, extendDuration);
+        emit ExtendedStaking(categoryId, vestingId, alice, increaseAmount, extendDuration);
 
-        vesting.extendStaking(categoryId, vestingId, extendDuration);
+        vesting.extendStaking(categoryId, vestingId, increaseAmount, extendDuration);
 
-        assertEq(trufToken.balanceOf(address(veTRUF)), stakeAmount, "Staked amount is invalid");
-        assertEq(trufToken.balanceOf(address(vesting)), trufBalanceBefore - stakeAmount, "Remaining balance is invalid");
+        assertEq(trufToken.balanceOf(address(veTRUF)), stakeAmount + increaseAmount, "Staked amount is invalid");
+        assertEq(
+            trufToken.balanceOf(address(vesting)),
+            trufBalanceBefore - stakeAmount - increaseAmount,
+            "Remaining balance is invalid"
+        );
 
         (uint128 lockupAmount,,,, bool lockupIsVesting) = veTRUF.lockups(alice, 0);
 
-        assertEq(lockupAmount, stakeAmount, "Lockup amount is invalid");
+        assertEq(lockupAmount, stakeAmount + increaseAmount, "Lockup amount is invalid");
         assertEq(lockupIsVesting, true, "Lockup vesting flag is invalid");
 
-        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount, startTime);
+        _validateUserVesting(categoryId, vestingId, alice, amount, 0, stakeAmount + increaseAmount, startTime);
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
 
         vm.stopPrank();
@@ -1065,11 +1145,21 @@ contract TrufVestingTest is Test {
 
         uint256 categoryId = 0;
         uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
 
         vm.startPrank(alice);
 
         vm.expectRevert(abi.encodeWithSignature("LockDoesNotExist()"));
-        vesting.extendStaking(categoryId, vestingId, 30 days);
+        vesting.extendStaking(categoryId, vestingId, 50e18, 30 days);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
+
+        vesting.extendStaking(categoryId, vestingId, amount - stakeAmount + 1, 10 days);
 
         vm.stopPrank();
     }
@@ -1156,7 +1246,7 @@ contract TrufVestingTest is Test {
 
         vm.stopPrank();
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit MigrateUser(categoryId, vestingId, alice, carol, 0);
@@ -1204,7 +1294,7 @@ contract TrufVestingTest is Test {
 
         vm.stopPrank();
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit MigrateUser(categoryId, vestingId, alice, carol, 1);
@@ -1227,7 +1317,7 @@ contract TrufVestingTest is Test {
     }
 
     function testMigrateUser_Revert_WhenSenderIsNotOwner() external {
-        console.log("Revert when msg.sender is not owner");
+        console.log("Revert when msg.sender is not admin");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -1237,7 +1327,7 @@ contract TrufVestingTest is Test {
 
         vm.startPrank(alice);
 
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
         vesting.migrateUser(categoryId, vestingId, alice, carol);
 
         vm.stopPrank();
@@ -1252,7 +1342,7 @@ contract TrufVestingTest is Test {
         uint256 categoryId = 0;
         uint256 vestingId = 0;
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectRevert(
             abi.encodeWithSignature("UserVestingAlreadySet(uint256,uint256,address)", categoryId, vestingId, bob)
@@ -1271,12 +1361,12 @@ contract TrufVestingTest is Test {
         uint256 categoryId = 0;
         uint256 vestingId = 0;
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectRevert(
             abi.encodeWithSignature("UserVestingDoesNotExists(uint256,uint256,address)", categoryId, vestingId, carol)
         );
-        vesting.migrateUser(categoryId, vestingId, carol, owner);
+        vesting.migrateUser(categoryId, vestingId, carol, admin);
 
         vm.stopPrank();
     }
@@ -1306,7 +1396,7 @@ contract TrufVestingTest is Test {
 
         vm.stopPrank();
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         uint256 vestingBalanceBefore = trufToken.balanceOf(address(vesting));
 
@@ -1354,7 +1444,7 @@ contract TrufVestingTest is Test {
 
         vm.stopPrank();
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         uint256 vestingBalanceBefore = trufToken.balanceOf(address(vesting));
 
@@ -1402,7 +1492,6 @@ contract TrufVestingTest is Test {
 
         uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
         vesting.claim(alice, categoryId, vestingId, claimAmount);
-        vesting.stake(categoryId, vestingId, stakeAmount, duration);
 
         (uint256 amount, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
         assertNotEq(claimed, 0, "Claimed amount should be non-zero");
@@ -1411,9 +1500,11 @@ contract TrufVestingTest is Test {
         uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
         assertNotEq(claimable, 0, "Claimable amount should be non-zero");
 
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+
         vm.stopPrank();
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         uint256 vestingBalanceBefore = trufToken.balanceOf(address(vesting));
 
@@ -1423,19 +1514,20 @@ contract TrufVestingTest is Test {
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 1, "Lockup id is invalid");
 
         vm.expectEmit(true, true, true, true, address(vesting));
-        emit CancelVesting(categoryId, vestingId, alice, false);
+        emit CancelVesting(categoryId, vestingId, alice, true);
 
-        vesting.cancelVesting(categoryId, vestingId, alice, false);
+        vesting.cancelVesting(categoryId, vestingId, alice, true);
 
+        claimed += claimable;
         assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount for prev user should be zero");
 
         _validateUserVesting(categoryId, vestingId, alice, 0, 0, 0, 0);
         _validateCategory(
-            categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable, claimAmount
+            categoryId, _category, _maxAllocation, _allocated + claimed - amount, _adminClaimable, claimed
         );
         assertEq(
             trufToken.balanceOf(address(vesting)),
-            vestingBalanceBefore + stakeAmount,
+            vestingBalanceBefore + stakeAmount + claimAmount - claimed,
             "Token does not move after cancel"
         );
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 0, "Lockup id should be zero");
@@ -1444,7 +1536,7 @@ contract TrufVestingTest is Test {
     }
 
     function testCancelVesting_Revert_WhenSenderIsNotOwner() external {
-        console.log("Revert when msg.sender is not owner");
+        console.log("Revert when msg.sender is not admin");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -1454,27 +1546,8 @@ contract TrufVestingTest is Test {
 
         vm.startPrank(alice);
 
-        vm.expectRevert("Ownable: caller is not the owner");
-        vesting.migrateUser(categoryId, vestingId, alice, carol);
-
-        vm.stopPrank();
-    }
-
-    function testCancelVesting_Revert_WhenNewUserHasVesting() external {
-        console.log("Revert when new user has vesting in same category and vesting id");
-
-        _setupVestingPlan();
-        _setupExampleUserVestings();
-
-        uint256 categoryId = 0;
-        uint256 vestingId = 0;
-
-        vm.startPrank(owner);
-
-        vm.expectRevert(
-            abi.encodeWithSignature("UserVestingAlreadySet(uint256,uint256,address)", categoryId, vestingId, bob)
-        );
-        vesting.migrateUser(categoryId, vestingId, alice, bob);
+        vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
+        vesting.cancelVesting(categoryId, vestingId, alice, true);
 
         vm.stopPrank();
     }
@@ -1488,12 +1561,12 @@ contract TrufVestingTest is Test {
         uint256 categoryId = 0;
         uint256 vestingId = 0;
 
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vm.expectRevert(
             abi.encodeWithSignature("UserVestingDoesNotExists(uint256,uint256,address)", categoryId, vestingId, carol)
         );
-        vesting.migrateUser(categoryId, vestingId, carol, owner);
+        vesting.cancelVesting(categoryId, vestingId, carol, true);
 
         vm.stopPrank();
     }
@@ -1541,6 +1614,35 @@ contract TrufVestingTest is Test {
         );
     }
 
+    function testClaimableAfterInitialReleaseBeforeCliff2() external {
+        console.log("Subtract locked amount from initial release amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 2;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,,) = vesting.userVestings(categoryId, vestingId, alice);
+
+        uint64 tgeTime = vesting.tgeTime();
+
+        (uint64 _initialReleasePct, uint64 _initialReleasePeriod, uint64 _cliff,,) =
+            vesting.vestingInfos(categoryId, vestingId);
+
+        vm.warp(tgeTime + _initialReleasePeriod + _cliff - 1);
+
+        uint256 initialRelease = amount * _initialReleasePct / vesting.DENOMINATOR();
+
+        uint256 stakeAmount = amount - initialRelease + 30;
+
+        vm.startPrank(alice);
+        vesting.stake(categoryId, vestingId, stakeAmount, 365 days);
+        vm.stopPrank();
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), initialRelease - 30, "Subtract locked amount");
+    }
+
     function testClaimableAfterCliff() external {
         console.log("Return vested amount if current time is after cliff");
 
@@ -1573,6 +1675,11 @@ contract TrufVestingTest is Test {
         vesting.setVestingCategory(type(uint256).max, "Seed", 391_000e18, false);
         vesting.setVestingCategory(type(uint256).max, "Private", 343_000e18, false);
         vesting.setVestingCategory(type(uint256).max, "Liquidity", 120_000e18, true);
+
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+
         vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
         vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(500, 0, 0, 24 * 30 days, 30 days));
         vesting.setVestingInfo(
@@ -1584,7 +1691,7 @@ contract TrufVestingTest is Test {
     }
 
     function _setupExampleUserVestings() internal {
-        vm.startPrank(owner);
+        vm.startPrank(admin);
 
         vesting.setUserVesting(0, 0, alice, 0, 100e18);
         vesting.setUserVesting(0, 0, bob, 0, 200e18);

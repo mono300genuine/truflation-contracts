@@ -36,18 +36,15 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     error NotMigrate();
     error TooShort();
     error TooLong();
+    error AlreadyEnded();
 
-    // 1. Core Storage
-    /// @dev minimum staking duration in seconds
+    /// @dev Minimum staking duration in seconds
     uint256 public immutable minStakeDuration;
-
-    // 2. Staking and Lockup Storage
-    uint256 public constant YEAR_BASE = 18e17;
 
     /// @dev Maximum duration
     uint256 public constant MAX_DURATION = 365 days * 3; // 3 years
 
-    /// @dev lockup list per users
+    /// @dev Lockup list per users
     mapping(address => Lockup[]) public lockups;
 
     /// @dev TRUF token address
@@ -146,7 +143,8 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
         }
 
         // duration checked inside previewPoints
-        (uint256 points, uint256 end) = previewPoints(amount, duration);
+        uint256 points = previewPoints(amount, duration);
+        uint256 end = block.timestamp + duration;
         if (points + totalSupply() > type(uint192).max) {
             revert MaxPointsExceeded();
         }
@@ -196,22 +194,26 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Extend lock duration
+     * @notice Extend lock duration and increase token amount
      *
      * @param lockupId the id of the old lockup to extend
+     * @param amount token amount to increase
      * @param duration number of seconds from now to stake for
      */
-    function extendLock(uint256 lockupId, uint256 duration) external {
-        _extendLock(msg.sender, lockupId, duration, false);
+    function extendLock(uint256 lockupId, uint256 amount, uint256 duration) external {
+        _extendLock(msg.sender, lockupId, amount, duration, false);
     }
 
     /**
-     * @notice Extend lock duration for vesting
+     * @notice Extend lock duration and increase token amount for vesting
      *
+     * @param user user address
+     * @param lockupId the id of the old lockup to extend
+     * @param amount token amount to increase
      * @param duration number of seconds from now to stake for
      */
-    function extendVestingLock(address user, uint256 lockupId, uint256 duration) external onlyVesting {
-        _extendLock(user, lockupId, duration, true);
+    function extendVestingLock(address user, uint256 lockupId, uint256 amount, uint256 duration) external onlyVesting {
+        _extendLock(user, lockupId, amount, duration, true);
     }
 
     /**
@@ -239,6 +241,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         uint256 points = oldLockup.points;
         stakingRewards.withdraw(oldUser, points);
+        stakingRewards.getReward(oldUser, newUser);
         _burn(oldUser, points);
 
         newLockupId = lockups[newUser].length;
@@ -248,6 +251,11 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         delete lockups[oldUser][lockupId];
 
+        if (delegates(newUser) == address(0)) {
+            // Delegate voting power to the new user, if unregistered
+            _delegate(newUser, newUser);
+        }
+
         emit Migrated(oldUser, newUser, lockupId, newLockupId);
     }
 
@@ -255,7 +263,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
      * @notice Claim TRUF staking rewards
      */
     function claimReward() external {
-        stakingRewards.getReward(msg.sender);
+        stakingRewards.getReward(msg.sender, msg.sender);
     }
 
     /**
@@ -265,9 +273,8 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
      * @param amount TRUF to be staked
      * @param duration number of seconds to stake for
      * @return points staking points that would be returned
-     * @return end staking period end date
      */
-    function previewPoints(uint256 amount, uint256 duration) public view returns (uint256 points, uint256 end) {
+    function previewPoints(uint256 amount, uint256 duration) public view returns (uint256 points) {
         if (duration < minStakeDuration) {
             revert TooShort();
         }
@@ -276,7 +283,6 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
         }
 
         points = amount * duration / MAX_DURATION;
-        end = block.timestamp + duration;
     }
 
     /**
@@ -316,52 +322,67 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     /**
      * @notice Extend lock duration
      *
-     * The stake end time is computed from the current time + duration, just
-     * like it is for new stakes. So a new stake for seven days duration and
-     * an old stake extended with a seven days duration would have the same
-     * end.
-     *
-     * If an extend is made before the start of staking, the start time for
-     * the new stake is shifted forwards to the start of staking, which also
-     * shifts forward the end date.
-     *
      * @param user user address
      * @param lockupId the id of the old lockup to extend
+     * @param amount amount to increase
      * @param duration number of seconds from now to stake for
      * @param isVesting true if called from vesting
      */
-    function _extendLock(address user, uint256 lockupId, uint256 duration, bool isVesting) internal {
+    function _extendLock(address user, uint256 lockupId, uint256 amount, uint256 duration, bool isVesting) internal {
         // duration checked inside previewPoints
         Lockup memory lockup = lockups[user][lockupId];
         if (lockup.isVesting != isVesting) {
             revert NoAccess();
         }
 
-        uint256 amount = lockup.amount;
+        address _user = user;
+        uint256 _lockupId = lockupId;
+        uint256 _amount = amount;
+
+        uint256 oldAmount = lockup.amount;
         uint256 oldEnd = lockup.end;
+
+        if (oldEnd <= block.timestamp) {
+            revert AlreadyEnded();
+        }
+
         uint256 oldPoints = lockup.points;
-        uint256 newDuration = lockup.duration + duration;
+        uint256 oldDuration = lockup.duration;
+        uint256 newEnd = oldEnd + duration;
+        uint256 newDuration = oldDuration + duration;
 
-        (uint256 newPoints,) = previewPoints(amount, newDuration);
+        if (newDuration > MAX_DURATION) {
+            revert TooLong();
+        }
 
-        if (newPoints <= oldPoints) {
+        uint256 mintAmount = ((oldAmount * duration) + (_amount * (newEnd - block.timestamp))) / MAX_DURATION;
+
+        if (mintAmount == 0) {
             revert NotIncrease();
         }
 
-        uint256 newEnd = oldEnd + duration;
+        if (mintAmount + totalSupply() > type(uint192).max) {
+            revert MaxPointsExceeded();
+        }
 
-        uint256 mintAmount = newPoints - oldPoints;
+        uint256 newPoints = oldPoints + mintAmount;
+        uint256 newAmount = oldAmount + _amount;
 
+        lockup.amount = uint128(newAmount);
         lockup.end = uint128(newEnd);
         lockup.duration = uint128(newDuration);
         lockup.points = newPoints;
 
-        lockups[user][lockupId] = lockup;
+        if (_amount != 0) {
+            trufToken.safeTransferFrom(msg.sender, address(this), _amount); // Important that it's sender
+        }
 
-        stakingRewards.stake(user, mintAmount);
-        _mint(user, mintAmount);
+        lockups[_user][_lockupId] = lockup;
 
-        emit Unstake(user, isVesting, lockupId, amount, oldEnd, oldPoints);
-        emit Stake(user, isVesting, lockupId, amount, newEnd, newPoints);
+        stakingRewards.stake(_user, mintAmount);
+        _mint(_user, mintAmount);
+
+        emit Unstake(_user, isVesting, _lockupId, oldAmount, oldEnd, oldPoints);
+        emit Stake(_user, isVesting, _lockupId, newAmount, newEnd, newPoints);
     }
 }

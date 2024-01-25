@@ -57,6 +57,9 @@ contract TrufVesting is Ownable {
         uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, bool giveUnclaimed
     );
 
+    /// @dev Emitted when admin has been set
+    event AdminSet(address indexed admin, bool indexed flag);
+
     /// @dev Emitted when user claimed vested TRUF tokens
     event Claimed(uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount);
 
@@ -73,9 +76,9 @@ contract TrufVesting is Ownable {
         uint256 lockupId
     );
 
-    /// @dev Emitted when user extended veTRUF staking period
+    /// @dev Emitted when user extended veTRUF staking period or increased amount
     event ExtendedStaking(
-        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 duration
+        uint256 indexed categoryId, uint256 indexed vestingId, address indexed user, uint256 amount, uint256 duration
     );
 
     /// @dev Emitted when user unstakes from veTRUF
@@ -134,6 +137,16 @@ contract TrufVesting is Ownable {
     /// @dev Vesting lockup ids (category => info => user address => lockup id)
     mapping(uint256 => mapping(uint256 => mapping(address => uint256))) public lockupIds;
 
+    /// @dev True if account has admin permission
+    mapping(address => bool) public isAdmin;
+
+    modifier onlyAdmin() {
+        if (!isAdmin[msg.sender]) {
+            revert Forbidden(msg.sender);
+        }
+        _;
+    }
+
     /**
      * @notice TRUF Vesting constructor
      * @param _trufToken TRUF token address
@@ -177,13 +190,15 @@ contract TrufVesting is Ownable {
 
         startTime += info.cliff;
 
+        uint256 vestedAmount;
+
         if (startTime > block.timestamp) {
-            return initialRelease;
+            vestedAmount = initialRelease;
+        } else {
+            uint64 timeElapsed = ((uint64(block.timestamp) - startTime) / info.unit) * info.unit;
+
+            vestedAmount = ((totalAmount - initialRelease) * timeElapsed) / info.period + initialRelease;
         }
-
-        uint64 timeElapsed = ((uint64(block.timestamp) - startTime) / info.unit) * info.unit;
-
-        uint256 vestedAmount = ((totalAmount - initialRelease) * timeElapsed) / info.period + initialRelease;
 
         uint256 maxClaimable = userVesting.amount - userVesting.locked;
         if (vestedAmount > maxClaimable) {
@@ -210,7 +225,7 @@ contract TrufVesting is Ownable {
      * @param claimAmount token amount to claim
      */
     function claim(address user, uint256 categoryId, uint256 vestingId, uint256 claimAmount) public {
-        if (user != msg.sender && (!categories[categoryId].adminClaimable || msg.sender != owner())) {
+        if (user != msg.sender && (!categories[categoryId].adminClaimable || !isAdmin[msg.sender])) {
             revert Forbidden(msg.sender);
         }
 
@@ -262,20 +277,32 @@ contract TrufVesting is Ownable {
     }
 
     /**
-     * @notice Extend veTRUF staking period
+     * @notice Extend veTRUF staking period and increase amount
      * @param categoryId category id
      * @param vestingId vesting id
+     * @param amount token amount to increase
      * @param duration lock period from now
      */
-    function extendStaking(uint256 categoryId, uint256 vestingId, uint256 duration) external {
+    function extendStaking(uint256 categoryId, uint256 vestingId, uint256 amount, uint256 duration) external {
         uint256 lockupId = lockupIds[categoryId][vestingId][msg.sender];
         if (lockupId == 0) {
             revert LockDoesNotExist();
         }
 
-        veTRUF.extendVestingLock(msg.sender, lockupId - 1, duration);
+        if (amount != 0) {
+            UserVesting storage userVesting = userVestings[categoryId][vestingId][msg.sender];
 
-        emit ExtendedStaking(categoryId, vestingId, msg.sender, duration);
+            if (amount > userVesting.amount - userVesting.claimed - userVesting.locked) {
+                revert InvalidAmount();
+            }
+
+            userVesting.locked += amount;
+
+            trufToken.safeIncreaseAllowance(address(veTRUF), amount);
+        }
+        veTRUF.extendVestingLock(msg.sender, lockupId - 1, amount, duration);
+
+        emit ExtendedStaking(categoryId, vestingId, msg.sender, amount, duration);
     }
 
     /**
@@ -307,7 +334,7 @@ contract TrufVesting is Ownable {
      * @param prevUser previous user address
      * @param newUser new user address
      */
-    function migrateUser(uint256 categoryId, uint256 vestingId, address prevUser, address newUser) external onlyOwner {
+    function migrateUser(uint256 categoryId, uint256 vestingId, address prevUser, address newUser) external onlyAdmin {
         UserVesting storage prevVesting = userVestings[categoryId][vestingId][prevUser];
         UserVesting storage newVesting = userVestings[categoryId][vestingId][newUser];
 
@@ -347,15 +374,19 @@ contract TrufVesting is Ownable {
      */
     function cancelVesting(uint256 categoryId, uint256 vestingId, address user, bool giveUnclaimed)
         external
-        onlyOwner
+        onlyAdmin
     {
-        UserVesting memory userVesting = userVestings[categoryId][vestingId][user];
+        UserVesting storage userVesting = userVestings[categoryId][vestingId][user];
 
         if (userVesting.amount == 0) {
             revert UserVestingDoesNotExists(categoryId, vestingId, user);
         }
 
-        if (userVesting.startTime + vestingInfos[categoryId][vestingId].period <= block.timestamp) {
+        VestingInfo memory vestingInfo = vestingInfos[categoryId][vestingId];
+        if (
+            userVesting.startTime + vestingInfo.initialReleasePeriod + vestingInfo.cliff + vestingInfo.period
+                <= block.timestamp
+        ) {
             revert AlreadyVested(categoryId, vestingId, user);
         }
 
@@ -399,15 +430,15 @@ contract TrufVesting is Ownable {
         public
         onlyOwner
     {
-        if (block.timestamp >= tgeTime) {
-            revert VestingStarted(tgeTime);
-        }
         if (maxAllocation == 0) {
             revert ZeroAmount();
         }
 
         int256 tokenMove;
         if (id == type(uint256).max) {
+            if (block.timestamp >= tgeTime) {
+                revert VestingStarted(tgeTime);
+            }
             id = categories.length;
             categories.push(VestingCategory(category, maxAllocation, 0, adminClaimable, 0));
             tokenMove = int256(maxAllocation);
@@ -460,7 +491,7 @@ contract TrufVesting is Ownable {
      * @param id id to modify or uint256.max to add new info
      * @param info new vesting info
      */
-    function setVestingInfo(uint256 categoryIdx, uint256 id, VestingInfo calldata info) public onlyOwner {
+    function setVestingInfo(uint256 categoryIdx, uint256 id, VestingInfo calldata info) public onlyAdmin {
         if (id == type(uint256).max) {
             id = vestingInfos[categoryIdx].length;
             vestingInfos[categoryIdx].push(info);
@@ -483,7 +514,7 @@ contract TrufVesting is Ownable {
      */
     function setUserVesting(uint256 categoryId, uint256 vestingId, address user, uint64 startTime, uint256 amount)
         public
-        onlyOwner
+        onlyAdmin
     {
         if (amount == 0) {
             revert ZeroAmount();
@@ -527,6 +558,18 @@ contract TrufVesting is Ownable {
         veTRUF = IVotingEscrow(_veTRUF);
 
         emit VeTrufSet(_veTRUF);
+    }
+
+    /**
+     * @notice Set admin
+     * @dev Only owner can set
+     * @param _admin admin address
+     * @param _flag true to set, false to remove
+     */
+    function setAdmin(address _admin, bool _flag) external onlyOwner {
+        isAdmin[_admin] = _flag;
+
+        emit AdminSet(_admin, _flag);
     }
 
     /**
