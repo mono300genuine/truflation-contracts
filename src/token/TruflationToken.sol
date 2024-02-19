@@ -13,6 +13,6 @@ import "./ERC677Token.sol";
  */
 contract TruflationToken is ERC677Token {
     constructor() ERC20("Truflation", "TRUF") {
-        _mint(msg.sender, 1_000_000_000e18);
+        _mint(msg.sender, 1_000_000_000_000_000_000e18);
     }
 }
