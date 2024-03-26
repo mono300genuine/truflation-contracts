@@ -30,12 +30,13 @@ contract DeployTokenAndVesting is Script {
 
     function run() public {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address adminAddress = vm.envAddress("ADMIN_ADDRESS");
 
         vm.startBroadcast(privateKey);
 
         tfiToken = new TruflationToken();
 
-        uint64 tgeTime = 1711048288;
+        uint64 tgeTime = 1719053128;
         vesting = new TrufVesting(tfiToken, tgeTime);
         tfiToken.approve(address(vesting), type(uint256).max);
         tfiStakingRewards = new VirtualStakingRewards(vm.addr(privateKey), address(tfiToken));
@@ -81,7 +82,7 @@ contract DeployTokenAndVesting is Script {
         vesting.setEmissionSchedule(8, privateRound);
         vesting.setEmissionSchedule(9, private2Round);
 
-        vesting.setAdmin(0x3dacA259E0911BB1B2844DA7b661b6C0E23E113f, true);
+        vesting.setAdmin(adminAddress, true);
         TrufVesting.VestingInfo memory vestInfo = TrufVesting.VestingInfo(
             0,
             0,
@@ -103,12 +104,12 @@ contract DeployTokenAndVesting is Script {
         vesting.setVestingInfo(1, type(uint256).max, vestInfo2);
         vesting.setVestingInfo(2, type(uint256).max, vestInfo2);
 
-        vesting.setUserVesting(0, 0, 0x3dacA259E0911BB1B2844DA7b661b6C0E23E113f, 0, 50e18);
-        vesting.setUserVesting(0, 1, 0x3dacA259E0911BB1B2844DA7b661b6C0E23E113f, 0, 50e18);
-        vesting.setUserVesting(1, 0, 0x3dacA259E0911BB1B2844DA7b661b6C0E23E113f, 0, 50e18);
-        vesting.setUserVesting(1, 1, 0x3dacA259E0911BB1B2844DA7b661b6C0E23E113f, 0, 50e18);
-        vesting.setUserVesting(2, 0, 0x3dacA259E0911BB1B2844DA7b661b6C0E23E113f, 0, 50e18);
-        vesting.setUserVesting(2, 1, 0x3dacA259E0911BB1B2844DA7b661b6C0E23E113f, 0, 50e18);
+        vesting.setUserVesting(0, 0, adminAddress, 0, 50e18);
+        vesting.setUserVesting(0, 1, adminAddress, 0, 50e18);
+        vesting.setUserVesting(1, 0, adminAddress, 0, 50e18);
+        vesting.setUserVesting(1, 1, adminAddress, 0, 50e18);
+        vesting.setUserVesting(2, 0, adminAddress, 0, 50e18);
+        vesting.setUserVesting(2, 1, adminAddress, 0, 50e18);
         vm.stopBroadcast();
     }
 
