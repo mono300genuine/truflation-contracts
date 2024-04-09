@@ -22,3 +22,10 @@ Install foundry to build and run tests
 ## Coverage
 
 `forge coverage`
+
+## Deploy Truf Vesting contract on ethereum
+```bash
+source .env
+
+forge script script/ethereum/01_deploy_vesting.sol:DeployVesting --rpc-url $MAINNET_RPC_URL --chain mainnet --private-key $PRIVATE_KEY  --broadcast --verify -- --admin-address $ADMIN_ADDRESS --truf-token $TRUF_TOKEN
+```
