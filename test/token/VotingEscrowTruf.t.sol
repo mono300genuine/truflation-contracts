@@ -26,7 +26,8 @@ contract VotingEscrowTrufTest is Test {
     string public name = "Voting Escrowed TRUF";
     string public symbol = "veTRUF";
 
-    uint256 public minStakeDuration = 1 hours;
+    uint256 public constant MIN_STAKE_DURATION = 1 hours;
+    uint256 public MAX_STAKE_DURATION = 365 days * 3; // 3 years
     uint256 public constant YEAR_BASE = 18e17;
 
     // Users
@@ -56,7 +57,7 @@ contract VotingEscrowTrufTest is Test {
         trufToken.transfer(vesting, trufToken.totalSupply() / 3);
         trufStakingRewards = new VirtualStakingRewards(owner, address(trufToken));
         veTRUF =
-            new VotingEscrowTruf(address(trufToken), address(vesting), minStakeDuration, address(trufStakingRewards));
+            new VotingEscrowTruf(address(trufToken), address(vesting), MIN_STAKE_DURATION, address(trufStakingRewards));
         trufStakingRewards.setOperator(address(veTRUF));
         trufToken.transfer(address(trufStakingRewards), 200e18);
         trufStakingRewards.notifyRewardAmount(200e18);
@@ -76,15 +77,16 @@ contract VotingEscrowTrufTest is Test {
         console.log("Check initial variables");
         assertEq(address(veTRUF.trufToken()), address(trufToken), "TRUF Token is invalid");
         assertEq(veTRUF.trufVesting(), vesting, "Vesting is invalid");
-        assertEq(veTRUF.minStakeDuration(), minStakeDuration, "minStakeDuration is invalid");
+        assertEq(veTRUF.minStakeDuration(), MIN_STAKE_DURATION, "MIN_STAKE_DURATION is invalid");
+        assertEq(veTRUF.MAX_DURATION(), MAX_STAKE_DURATION, "MAX_STAKE_DURATION is invalid");
         assertEq(address(veTRUF.stakingRewards()), address(trufStakingRewards), "StakingRewards is invalid");
         assertEq(veTRUF.name(), name, "Name is invalid");
         assertEq(veTRUF.symbol(), symbol, "Symbol is invalid");
         assertEq(veTRUF.decimals(), 18, "Decimal is invalid");
     }
 
-    function testTransfer_RevertAnytmie() external {
-        console.log("Always revert when transfering token");
+    function testTransfer_RevertAlways() external {
+        console.log("Always revert when transferring token");
 
         _stake(100e18, 30 days, alice, alice);
 
@@ -98,7 +100,35 @@ contract VotingEscrowTrufTest is Test {
     }
 
     function testStake_FirstTime() external {
-        console.log("Stake first time");
+        console.log("StakeTo first time");
+
+        uint256 amount = 100e18;
+        uint256 duration = 30 days;
+
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
+        assertNotEq(points, 0, "Points should be non-zero");
+
+        vm.startPrank(alice);
+
+        vm.expectEmit(true, true, true, true, address(veTRUF));
+        emit Stake(alice, false, 0, amount, ends, points);
+
+        veTRUF.stake(amount, duration);
+
+        vm.stopPrank();
+
+        assertEq(veTRUF.balanceOf(alice), points, "Alice should have balance");
+        assertEq(veTRUF.balanceOf(bob), 0, "Bob should not have balance");
+        assertEq(trufStakingRewards.balanceOf(alice), points, "Alice should have staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), amount, "TRUF token should be transferred");
+        assertEq(veTRUF.delegates(alice), alice, "Delegate is invalid");
+
+        _validateLockup(alice, 0, amount, duration, ends, points, false);
+    }
+
+    function testStakeTo_FirstTime() external {
+        console.log("StakeTo first time");
 
         uint256 amount = 100e18;
         uint256 duration = 30 days;
@@ -127,6 +157,37 @@ contract VotingEscrowTrufTest is Test {
 
     function testStake_SecondTime() external {
         console.log("Stake second time");
+
+        _stake(100e18, 30 days, alice, alice);
+
+        uint256 amount = 1000e18;
+        uint256 duration = 60 days;
+
+        uint256 prevBalance = veTRUF.balanceOf(alice);
+
+        uint256 points = veTRUF.previewPoints(amount, duration);
+        uint256 ends = block.timestamp + duration;
+        assertNotEq(points, 0, "Points should be non-zero");
+
+        vm.startPrank(alice);
+
+        vm.expectEmit(true, true, true, true, address(veTRUF));
+        emit Stake(alice, false, 1, amount, ends, points);
+
+        veTRUF.stake(amount, duration);
+
+        vm.stopPrank();
+
+        assertEq(veTRUF.balanceOf(alice), prevBalance + points, "Alice should have balance");
+        assertEq(trufStakingRewards.balanceOf(alice), prevBalance + points, "Alice should have staking balance");
+        assertEq(trufToken.balanceOf(address(veTRUF)), amount + 100e18, "TRUF token should be transferred");
+        assertEq(veTRUF.delegates(alice), alice, "Delegate is invalid");
+
+        _validateLockup(alice, 1, amount, duration, ends, points, false);
+    }
+
+    function testStakeTo_SecondTime() external {
+        console.log("StakeTo second time");
 
         _stake(100e18, 30 days, alice, bob);
 
@@ -181,8 +242,8 @@ contract VotingEscrowTrufTest is Test {
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
         veTRUF.stake(100e18, 30 days, address(0));
 
-        console.log("Revert if amount is greater than uint128.max");
-        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
+        console.log("Revert if amount is greater than available balance");
+        vm.expectRevert("ERC20: transfer amount exceeds balance");
         veTRUF.stake(uint256(type(uint128).max) + 1, 30 days, bob);
 
         vm.stopPrank();
@@ -438,6 +499,13 @@ contract VotingEscrowTrufTest is Test {
 
         vm.startPrank(alice);
 
+        vm.expectRevert(abi.encodeWithSignature("NotIncrease()"));
+        veTRUF.extendLock(0, 0, 0);
+
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+
         vm.expectRevert(abi.encodeWithSignature("TooLong()"));
         veTRUF.extendLock(0, 100e18, 365 days * 3 - 20 days);
 
@@ -673,5 +741,9 @@ contract VotingEscrowTrufTest is Test {
         assertEq(ends, uint256(_ends), "End timestamp is invalid");
         assertEq(points, _points, "Points is invalid");
         assertEq(isVesting, _isVesting, "isVesting is invalid");
+    }
+
+    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return b > a ? a : b;
     }
 }

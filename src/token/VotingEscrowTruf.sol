@@ -75,7 +75,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
         stakingRewards = IVirtualStakingRewards(_stakingRewards);
     }
 
-    function _transfer(address, address, uint256) internal override {
+    function _transfer(address, address, uint256) internal pure override {
         revert TransferDisabled();
     }
 
@@ -138,16 +138,10 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
         if (amount == 0) {
             revert ZeroAmount();
         }
-        if (amount > type(uint128).max) {
-            revert InvalidAmount();
-        }
 
         // duration checked inside previewPoints
         uint256 points = previewPoints(amount, duration);
         uint256 end = block.timestamp + duration;
-        if (points + totalSupply() > type(uint192).max) {
-            revert MaxPointsExceeded();
-        }
 
         lockups[to].push(
             Lockup({
@@ -286,7 +280,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     }
 
     /**
-     * @notice Interal function to unstake
+     * @notice Internal function to unstake
      * @param user User address
      * @param lockupId the id of the lockup to unstake
      * @param isVesting flag to stake with vested tokens or not
@@ -359,10 +353,6 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         if (mintAmount == 0) {
             revert NotIncrease();
-        }
-
-        if (mintAmount + totalSupply() > type(uint192).max) {
-            revert MaxPointsExceeded();
         }
 
         uint256 newPoints = oldPoints + mintAmount;
