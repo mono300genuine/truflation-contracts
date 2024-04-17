@@ -99,7 +99,7 @@ contract TrufVesting is Ownable {
         uint64 initialReleasePeriod; // Initial release period after TGE
         uint64 cliff; // Cliff period
         uint64 period; // Total period
-        uint64 unit; // The period to claim. ex. montlhy or 6 monthly
+        uint64 unit; // The period to claim. ex. monthly or 6 monthly
     }
 
     /// @dev User vesting info struct
@@ -163,7 +163,7 @@ contract TrufVesting is Ownable {
     }
 
     /**
-     * @notice Calcualte claimable amount (total vested amount - previously claimed amount - locked amount)
+     * @notice Calculate claimable amount (total vested amount - previously claimed amount - locked amount)
      * @param categoryId Vesting category id
      * @param vestingId Vesting id
      * @param user user address

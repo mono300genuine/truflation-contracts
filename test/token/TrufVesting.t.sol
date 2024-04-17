@@ -403,6 +403,32 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testSetEmissionSchedule_Revert_AfterTge() external {
+        console.log("Should revert when the emission schedule is set after the TGE");
+
+        uint256 maxAllocation = 1e20;
+
+        vm.startPrank(owner);
+        trufToken.approve(address(vesting), type(uint256).max);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", maxAllocation, false);
+
+        uint256[] memory emissions = new uint256[](5);
+        emissions[0] = 0;
+        emissions[1] = 1e18;
+        emissions[2] = 2e18;
+        emissions[3] = 3e18;
+        emissions[4] = 1e20;
+
+        uint256 tgeTime = vesting.tgeTime();
+
+        vm.warp(tgeTime + 1);
+
+        vm.expectRevert(abi.encodeWithSignature("VestingStarted(uint64)", tgeTime));
+        vesting.setEmissionSchedule(0, emissions);
+
+        vm.stopPrank();
+    }
+
     function testSetVestingInfo_AddFirstVestingInfo() external {
         console.log("Add first vesting info");
 
@@ -690,6 +716,39 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testMulticallFailNoError() external {
+        console.log("Send multiple transactions through multicall");
+
+        vm.startPrank(owner);
+        trufToken.approve(address(vesting), type(uint256).max);
+
+        bytes[] memory payloads = new bytes[](2);
+        payloads[0] = abi.encodeWithSignature(
+            "setVestingCategory(uint256,string,uint256,bool)", type(uint256).max, "Preseed", 1e20, false
+        );
+        payloads[1] = abi.encodeWithSignature("setVestingCategory(uint256,string,uint256,bool)", 1, "Seed", 2e20, true);
+
+        vm.expectRevert();
+        vesting.multicall(payloads);
+
+        vm.stopPrank();
+    }
+
+    function testMulticallFailWithError() external {
+        console.log("Send multiple transactions through multicall");
+
+        vm.startPrank(alice);
+        bytes[] memory payloads = new bytes[](1);
+        payloads[0] = abi.encodeWithSignature(
+            "setVestingCategory(uint256,string,uint256,bool)", type(uint256).max, "Preseed", 1e20, false
+        );
+
+        vm.expectRevert(abi.encodePacked("Ownable: caller is not the owner"));
+        vesting.multicall(payloads);
+
+        vm.stopPrank();
+    }
+
     function testClaim() external {
         console.log("Claim available amount");
 
@@ -718,6 +777,37 @@ contract TrufVestingTest is Test {
         assertEq(trufToken.balanceOf(alice), claimAmount, "Claimed amount is incorrect");
 
         _validateUserVesting(categoryId, vestingId, alice, amount, claimAmount, 0, startTime);
+
+        vm.stopPrank();
+    }
+
+    function testClaimMax() external {
+        console.log("Claim available amount");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        (uint256 amount,,, uint64 startTime) = vesting.userVestings(categoryId, vestingId, alice);
+
+        vm.warp(block.timestamp + 50 days);
+
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount should be non-zero");
+
+        vm.startPrank(alice);
+
+        vm.expectEmit(true, true, true, true, address(vesting));
+        emit Claimed(categoryId, vestingId, alice, claimable);
+
+        vesting.claim(alice, categoryId, vestingId, type(uint256).max);
+
+        assertEq(vesting.claimable(categoryId, vestingId, alice), 0, "Claimable amount is invalid");
+        assertEq(trufToken.balanceOf(alice), claimable, "Claimed amount is incorrect");
+
+        _validateUserVesting(categoryId, vestingId, alice, amount, claimable, 0, startTime);
 
         vm.stopPrank();
     }
@@ -1372,7 +1462,7 @@ contract TrufVestingTest is Test {
     }
 
     function testCancelVesting_ByTakingClaimableTokens() external {
-        console.log("Cancel vesting and remove uncalimed amount");
+        console.log("Cancel vesting and remove unclaimed amount");
 
         _setupVestingPlan();
         _setupExampleUserVestings();
@@ -1531,6 +1621,27 @@ contract TrufVestingTest is Test {
             "Token does not move after cancel"
         );
         assertEq(vesting.lockupIds(categoryId, vestingId, alice), 0, "Lockup id should be zero");
+
+        vm.stopPrank();
+    }
+
+    function testCancelVesting_WhenFinished() external {
+        console.log("Cancel vesting when the vesting is finished");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.warp(block.timestamp + 25 * 30 days);
+
+        vm.startPrank(admin);
+
+        vm.expectRevert(
+            abi.encodeWithSignature("AlreadyVested(uint256,uint256,address)", uint256(0), uint256(0), alice)
+        );
+        vesting.cancelVesting(categoryId, vestingId, alice, true);
 
         vm.stopPrank();
     }
