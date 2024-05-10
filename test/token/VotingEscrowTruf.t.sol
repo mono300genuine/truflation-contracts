@@ -85,6 +85,11 @@ contract VotingEscrowTrufTest is Test {
         assertEq(veTRUF.decimals(), 18, "Decimal is invalid");
     }
 
+    function testConstructorFailure() external {
+	    vm.expectRevert(abi.encodeWithSignature("TooLong()"));
+        new VotingEscrowTruf(address(trufToken), address(vesting), MAX_STAKE_DURATION + 1, address(trufStakingRewards));
+	}
+
     function testTransfer_RevertAlways() external {
         console.log("Always revert when transferring token");
 

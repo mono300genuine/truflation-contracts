@@ -640,6 +640,22 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testSetUserVesting_Revert_WhenUserIsZero() external {
+        console.log("Should revert set user vesting when user is zero");
+
+        _setupVestingPlan();
+
+        uint256 amount = 100e18;
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+
+        vm.startPrank(admin);
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        vesting.setUserVesting(categoryId, vestingId, address(0), 0, amount);
+
+        vm.stopPrank();
+    }
+
     function testSetUserVesting_Revert_WhenAmountIsZero() external {
         console.log("Should revert to set user vesting when amount is zero");
 
@@ -1420,6 +1436,40 @@ contract TrufVestingTest is Test {
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
         vesting.migrateUser(categoryId, vestingId, alice, carol);
 
+        vm.stopPrank();
+    }
+
+    function testMigrateUser_Revert_WhenNewUserIsZero() external {
+        console.log("Should revert migrate user when new user is zero");
+
+        _setupVestingPlan();
+        _setupExampleUserVestings();
+
+        uint256 categoryId = 0;
+        uint256 vestingId = 0;
+        uint256 stakeAmount = 10e18;
+        uint256 duration = 30 days;
+
+        vm.warp(block.timestamp + 50 days);
+
+        vm.startPrank(alice);
+
+        vesting.stake(categoryId, vestingId, stakeAmount, duration);
+        uint256 claimAmount = vesting.claimable(categoryId, vestingId, alice);
+        vesting.claim(alice, categoryId, vestingId, claimAmount);
+
+        (, uint256 claimed,,) = vesting.userVestings(categoryId, vestingId, alice);
+        assertNotEq(claimed, 0, "Claimed amount should be non-zero");
+
+        vm.warp(block.timestamp + 30 days);
+        uint256 claimable = vesting.claimable(categoryId, vestingId, alice);
+        assertNotEq(claimable, 0, "Claimable amount should be non-zero");
+
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        vesting.migrateUser(categoryId, vestingId, alice, address(0));
         vm.stopPrank();
     }
 

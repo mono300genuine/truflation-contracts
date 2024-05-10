@@ -335,6 +335,10 @@ contract TrufVesting is Ownable {
      * @param newUser new user address
      */
     function migrateUser(uint256 categoryId, uint256 vestingId, address prevUser, address newUser) external onlyAdmin {
+        if (newUser == address(0)) {
+            revert ZeroAddress();
+        }
+
         UserVesting storage prevVesting = userVestings[categoryId][vestingId][prevUser];
         UserVesting storage newVesting = userVestings[categoryId][vestingId][newUser];
 
@@ -516,6 +520,9 @@ contract TrufVesting is Ownable {
         public
         onlyAdmin
     {
+        if (user == address(0)) {
+            revert ZeroAddress();
+        }
         if (amount == 0) {
             revert ZeroAmount();
         }
