@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.19;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IUniswapV2Router01.sol";
 import "./interfaces/IStakingRewards.sol";
 
-contract TrufPartner is Ownable {
+contract TrufPartner is Ownable2Step {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();

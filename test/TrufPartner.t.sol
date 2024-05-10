@@ -78,6 +78,8 @@ contract TrufPartnerTest is Test {
             address(uniswapRouter)
         );
         trufPartner.transferOwnership(gov);
+        vm.prank(gov);
+        trufPartner.acceptOwnership();
 
         trufToken.mint(address(lpStaking), lpReward);
         lpStaking.notifyRewardAmount(lpReward);
