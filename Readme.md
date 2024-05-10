@@ -24,6 +24,7 @@ Install foundry to build and run tests
 `forge coverage`
 
 ## Deploy Truf Vesting contract on ethereum
+
 ```bash
 source .env
 

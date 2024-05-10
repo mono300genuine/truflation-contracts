@@ -64,18 +64,10 @@ contract TrufPartnerTest is Test {
         );
 
         lpToken = IERC20(uniswapFactory.getPair(address(trufToken), address(usdtToken)));
-        lpStaking = new StakingRewards(
-            address(this),
-            address(trufToken),
-            address(lpToken)
-        );
+        lpStaking = new StakingRewards(address(this), address(trufToken), address(lpToken));
 
         trufPartner = new TrufPartner(
-            address(trufToken),
-            address(usdtToken),
-            address(lpToken),
-            address(lpStaking),
-            address(uniswapRouter)
+            address(trufToken), address(usdtToken), address(lpToken), address(lpStaking), address(uniswapRouter)
         );
         trufPartner.transferOwnership(gov);
 
@@ -94,53 +86,23 @@ contract TrufPartnerTest is Test {
     function testConstructorFailure() external {
         console.log("Should revert if trufToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TrufPartner(
-            address(0),
-            address(usdtToken),
-            address(lpToken),
-            address(lpStaking),
-            address(uniswapRouter)
-        );
+        new TrufPartner(address(0), address(usdtToken), address(lpToken), address(lpStaking), address(uniswapRouter));
 
         console.log("Should revert if pairToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TrufPartner(
-            address(trufToken),
-            address(0),
-            address(lpToken),
-            address(lpStaking),
-            address(uniswapRouter)
-        );
+        new TrufPartner(address(trufToken), address(0), address(lpToken), address(lpStaking), address(uniswapRouter));
 
         console.log("Should revert if lpToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TrufPartner(
-            address(trufToken),
-            address(usdtToken),
-            address(0),
-            address(lpStaking),
-            address(uniswapRouter)
-        );
+        new TrufPartner(address(trufToken), address(usdtToken), address(0), address(lpStaking), address(uniswapRouter));
 
         console.log("Should revert if lpToken is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TrufPartner(
-            address(trufToken),
-            address(usdtToken),
-            address(lpToken),
-            address(0),
-            address(uniswapRouter)
-        );
+        new TrufPartner(address(trufToken), address(usdtToken), address(lpToken), address(0), address(uniswapRouter));
 
         console.log("Should revert if uni v2 router is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new TrufPartner(
-            address(trufToken),
-            address(usdtToken),
-            address(lpToken),
-            address(lpStaking),
-            address(0)
-        );
+        new TrufPartner(address(trufToken), address(usdtToken), address(lpToken), address(lpStaking), address(0));
     }
 
     function testInitiateSuccess() external {

@@ -11,6 +11,7 @@ contract DeployToken is Script {
     using stdJson for string;
 
     function setUp() public {}
+
     TruflationToken public tfiToken;
 
     function run() public {

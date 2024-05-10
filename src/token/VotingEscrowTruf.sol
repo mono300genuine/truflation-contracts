@@ -18,7 +18,6 @@ import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
  * The balance received for staking (and thus the voting power and rewards
  * distribution) goes up exponentially by the end of the staked period.
  */
-
 contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
     using SafeERC20 for IERC20;
 
