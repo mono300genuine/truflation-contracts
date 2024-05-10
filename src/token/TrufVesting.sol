@@ -4,6 +4,7 @@ pragma solidity 0.8.19;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
 
 /**
@@ -14,6 +15,8 @@ import {IVotingEscrow} from "../interfaces/IVotingEscrow.sol";
  */
 contract TrufVesting is Ownable {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
+    using SafeCast for int256;
 
     error ZeroAddress();
     error ZeroAmount();
@@ -450,21 +453,21 @@ contract TrufVesting is Ownable {
             }
             id = categories.length;
             categories.push(VestingCategory(category, maxAllocation, 0, adminClaimable, 0));
-            tokenMove = int256(maxAllocation);
+            tokenMove = maxAllocation.toInt256();
         } else {
             if (categories[id].allocated > maxAllocation) {
                 revert MaxAllocationExceed();
             }
-            tokenMove = int256(maxAllocation) - int256(categories[id].maxAllocation);
+            tokenMove = maxAllocation.toInt256() - categories[id].maxAllocation.toInt256();
             categories[id].maxAllocation = maxAllocation;
             categories[id].category = category;
             categories[id].adminClaimable = adminClaimable;
         }
 
         if (tokenMove > 0) {
-            trufToken.safeTransferFrom(msg.sender, address(this), uint256(tokenMove));
+            trufToken.safeTransferFrom(msg.sender, address(this), tokenMove.toUint256());
         } else if (tokenMove < 0) {
-            trufToken.safeTransfer(msg.sender, uint256(-tokenMove));
+            trufToken.safeTransfer(msg.sender, (-tokenMove).toUint256());
         }
 
         emit VestingCategorySet(id, category, maxAllocation, adminClaimable);
