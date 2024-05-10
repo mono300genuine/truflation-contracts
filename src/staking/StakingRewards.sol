@@ -16,10 +16,10 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable {
 
     /* ========== STATE VARIABLES ========== */
 
-    address public rewardsDistribution;
+    address public immutable rewardsToken;
+    address public immutable stakingToken;
 
-    address public rewardsToken;
-    address public stakingToken;
+    address public rewardsDistribution;
     uint256 public periodFinish = 0;
     uint256 public rewardRate = 0;
     uint256 public rewardsDuration = 7 days;
