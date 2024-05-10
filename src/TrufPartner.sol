@@ -66,8 +66,11 @@ contract TrufPartner is Ownable {
 
     constructor(address _trufToken, address _pairToken, address _lpToken, address _lpStaking, address _uniV2Router) {
         if (
-            _trufToken == address(0) || _pairToken == address(0) || _lpToken == address(0) || _lpStaking == address(0)
-                || _uniV2Router == address(0)
+            _trufToken == address(0) ||
+            _pairToken == address(0) ||
+            _lpToken == address(0) ||
+            _lpStaking == address(0) ||
+            _uniV2Router == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -77,6 +80,11 @@ contract TrufPartner is Ownable {
         lpToken = IERC20(_lpToken);
         lpStaking = IStakingRewards(_lpStaking);
         uniV2Router = IUniswapV2Router01(_uniV2Router);
+
+        lpToken.safeApprove(address(uniV2Router), type(uint256).max);
+        lpToken.safeApprove(address(lpStaking), type(uint256).max);
+        pairToken.safeApprove(address(uniV2Router), type(uint256).max);
+        trufToken.safeApprove(address(uniV2Router), type(uint256).max);
     }
 
     function initiate(
@@ -133,8 +141,6 @@ contract TrufPartner is Ownable {
         subscription.status = Status.Active;
 
         pairToken.safeTransferFrom(msg.sender, address(this), pairTokenMaxIn);
-        pairToken.safeApprove(address(uniV2Router), pairTokenMaxIn);
-        trufToken.safeApprove(address(uniV2Router), subscription.trufAmount);
         (, uint256 pairTokenIn, uint256 lpAmount) = uniV2Router.addLiquidity(
             address(trufToken),
             address(pairToken),
@@ -154,7 +160,6 @@ contract TrufPartner is Ownable {
 
         _updateRewardDebt();
 
-        lpToken.safeApprove(address(lpStaking), lpAmount);
         lpStaking.stake(lpAmount);
 
         totalLpStaked += lpAmount;
@@ -186,7 +191,6 @@ contract TrufPartner is Ownable {
 
         totalLpStaked -= subscription.lpAmount;
 
-        lpToken.safeApprove(address(uniV2Router), subscription.lpAmount);
         (uint256 trufTokenOut, uint256 pairTokenOut) = uniV2Router.removeLiquidity(
             address(trufToken),
             address(pairToken),
@@ -235,7 +239,6 @@ contract TrufPartner is Ownable {
 
             totalLpStaked -= subscription.lpAmount;
 
-            lpToken.safeApprove(address(uniV2Router), subscription.lpAmount);
             (uint256 trufTokenOut, uint256 pairTokenOut) = uniV2Router.removeLiquidity(
                 address(trufToken),
                 address(pairToken),
