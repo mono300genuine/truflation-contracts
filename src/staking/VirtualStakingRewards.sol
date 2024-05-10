@@ -15,6 +15,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
     error Forbidden(address sender);
     error RewardPeriodNotFinished();
     error InsufficientRewards();
+    error DurationTooLong();
 
     /* ========== STATE VARIABLES ========== */
 
@@ -160,9 +161,10 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable {
     function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
         if (block.timestamp <= periodFinish) {
             revert RewardPeriodNotFinished();
-        }
-        if (_rewardsDuration == 0) {
+        } else if (_rewardsDuration == 0) {
             revert ZeroAmount();
+        } else if (_rewardsDuration > 5 * 365 days) {
+            revert DurationTooLong();
         }
 
         rewardsDuration = _rewardsDuration;
