@@ -81,10 +81,10 @@ contract TrufPartner is Ownable {
         lpStaking = IStakingRewards(_lpStaking);
         uniV2Router = IUniswapV2Router01(_uniV2Router);
 
-        lpToken.safeApprove(address(uniV2Router), type(uint256).max);
-        lpToken.safeApprove(address(lpStaking), type(uint256).max);
-        pairToken.safeApprove(address(uniV2Router), type(uint256).max);
-        trufToken.safeApprove(address(uniV2Router), type(uint256).max);
+        lpToken.safeIncreaseAllowance(address(uniV2Router), type(uint256).max);
+        lpToken.safeIncreaseAllowance(address(lpStaking), type(uint256).max);
+        pairToken.safeIncreaseAllowance(address(uniV2Router), type(uint256).max);
+        trufToken.safeIncreaseAllowance(address(uniV2Router), type(uint256).max);
     }
 
     function initiate(
