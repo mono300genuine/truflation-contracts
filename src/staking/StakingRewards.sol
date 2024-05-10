@@ -18,8 +18,8 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable {
 
     address public rewardsDistribution;
 
-    address public rewardsToken;
-    address public stakingToken;
+    address public immutable rewardsToken;
+    address public immutable stakingToken;
     uint256 public periodFinish = 0;
     uint256 public rewardRate = 0;
     uint256 public rewardsDuration = 7 days;
