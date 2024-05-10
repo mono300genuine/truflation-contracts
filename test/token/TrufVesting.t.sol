@@ -167,7 +167,7 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
         vm.startPrank(admin);
 
-        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
+        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 14 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
 
@@ -202,7 +202,7 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
         vm.startPrank(admin);
 
-        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
+        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 14 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
 
@@ -236,7 +236,7 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
         vm.startPrank(admin);
 
-        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 10 days, 7 days));
+        vesting.setVestingInfo(1, type(uint256).max, TrufVesting.VestingInfo(0, 0, 0, 14 days, 7 days));
         vesting.setUserVesting(1, 0, alice, 0, allocated);
         _validateCategory(1, "Seed", 1e15, allocated, false, 0);
 
@@ -473,7 +473,7 @@ contract TrufVestingTest is Test {
 
         vm.startPrank(admin);
 
-        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 182 days, 7 days));
 
         vm.expectEmit(true, true, true, true, address(vesting));
         emit VestingInfoSet(0, 0, TrufVesting.VestingInfo(initialReleasePct, initialReleasePeriod, cliff, period, unit));
@@ -495,7 +495,7 @@ contract TrufVestingTest is Test {
 
         vm.startPrank(alice);
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 182 days, 7 days));
 
         vm.stopPrank();
     }

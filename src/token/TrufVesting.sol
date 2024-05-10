@@ -32,6 +32,11 @@ contract TrufVesting is Ownable {
     error AlreadyVested(uint256 categoryIdx, uint256 vestingId, address user);
     error LockExist();
     error LockDoesNotExist();
+    error InvalidInitialReleasePct();
+    error InvalidInitialReleasePeriod();
+    error InvalidCliff();
+    error InvalidPeriod();
+    error InvalidUnit();
 
     /// @dev Emitted when vesting category is set
     event VestingCategorySet(uint256 indexed id, string category, uint256 maxAllocation, bool adminClaimable);
@@ -492,6 +497,17 @@ contract TrufVesting is Ownable {
      * @param info new vesting info
      */
     function setVestingInfo(uint256 categoryIdx, uint256 id, VestingInfo calldata info) public onlyAdmin {
+        if (info.initialReleasePct > DENOMINATOR) {
+            revert InvalidInitialReleasePct();
+        } else if (info.initialReleasePeriod > info.period) {
+            revert InvalidInitialReleasePeriod();
+        } else if (info.cliff > 5 * 365 days) {
+            revert InvalidCliff();
+        } else if (info.period > 5 * 365 days) {
+            revert InvalidPeriod();
+        } else if (info.period % info.unit != 0) {
+            revert InvalidUnit();
+        }
         if (id == type(uint256).max) {
             id = vestingInfos[categoryIdx].length;
             vestingInfos[categoryIdx].push(info);
