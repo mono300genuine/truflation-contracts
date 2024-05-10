@@ -67,6 +67,10 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
         ERC20("Voting Escrowed TRUF", "veTRUF")
         ERC20Permit("veTRUF")
     {
+        if (_minStakeDuration > MAX_DURATION) {
+            revert TooLong();
+        }
+
         trufToken = IERC20(_trufToken);
         trufVesting = _trufVesting;
         minStakeDuration = _minStakeDuration;

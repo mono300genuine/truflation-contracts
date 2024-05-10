@@ -153,6 +153,7 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable {
     }
 
     function setRewardsDistribution(address _rewardsDistribution) external onlyOwner {
+        require(_rewardsDistribution != address(0), "Rewards Distribution cannot be 0");
         rewardsDistribution = _rewardsDistribution;
     }
 
