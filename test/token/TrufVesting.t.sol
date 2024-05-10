@@ -500,6 +500,29 @@ contract TrufVestingTest is Test {
         vm.stopPrank();
     }
 
+    function testSetVestingInfo_Revert_VariableLimits() external {
+        console.log("Should revert when the variables are out of limits");
+
+        vm.startPrank(owner);
+        trufToken.approve(address(vesting), type(uint256).max);
+        vesting.setVestingCategory(type(uint256).max, "Preseed", 1e20, false);
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+        vm.expectRevert(abi.encodeWithSignature("InvalidInitialReleasePct()"));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10001, 10 days, 30 days, 182 days, 7 days));
+        vm.expectRevert(abi.encodeWithSignature("InvalidInitialReleasePeriod()"));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 190 days, 30 days, 182 days, 7 days));
+        vm.expectRevert(abi.encodeWithSignature("InvalidCliff()"));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 5 * 365 days + 1, 182 days, 7 days));
+        vm.expectRevert(abi.encodeWithSignature("InvalidPeriod()"));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 5 * 365 days + 1, 7 days));
+        vm.expectRevert(abi.encodeWithSignature("InvalidUnit()"));
+        vesting.setVestingInfo(0, type(uint256).max, TrufVesting.VestingInfo(10, 10 days, 30 days, 180 days, 7 days));
+
+        vm.stopPrank();
+    }
+
     function testSetUserVesting_AddFirstUserVesting() external {
         console.log("Add first user vesting");
 
