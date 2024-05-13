@@ -7,6 +7,11 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IUniswapV2Router01.sol";
 import "./interfaces/IStakingRewards.sol";
 
+/**
+ * @title TrufPartner
+ * @author Truflation Team
+ * @dev A contract for managing subscriptions.
+ */
 contract TrufPartner is Ownable2Step {
     using SafeERC20 for IERC20;
 
@@ -62,7 +67,7 @@ contract TrufPartner is Ownable2Step {
     IStakingRewards public immutable lpStaking;
     mapping(bytes32 => Subscription) public subscriptions;
     uint256 public totalLpStaked;
-    uint256 public accTrufPerLp; // Accumulated TRUF reward per LP token;
+    uint256 public accTrufPerLp;
 
     constructor(address _trufToken, address _pairToken, address _lpToken, address _lpStaking, address _uniV2Router) {
         if (
@@ -87,6 +92,16 @@ contract TrufPartner is Ownable2Step {
         trufToken.safeApprove(address(uniV2Router), type(uint256).max);
     }
 
+    /**
+     * @dev Initiates a subscription.
+     * @param id Identifier of the subscription.
+     * @param period Duration of the subscription.
+     * @param startTime Start time of the subscription.
+     * @param pToken Address of the paired token.
+     * @param pTokenAmount Amount of paired tokens.
+     * @param pOwner Address of the paired token owner.
+     * @param trufAmount Amount of TRUF tokens.
+     */
     function initiate(
         bytes32 id,
         uint256 period,
@@ -126,6 +141,14 @@ contract TrufPartner is Ownable2Step {
         emit Initiated(id, period, startTime, pToken, pTokenAmount, pOwner, trufAmount);
     }
 
+    /**
+     * @dev Pays for a subscription, adding liquidity and staking LP tokens.
+     * @param id Identifier of the subscription.
+     * @param pairTokenMinIn Minimum amount of paired tokens to be deposited.
+     * @param pairTokenMaxIn Maximum amount of paired tokens to be deposited.
+     * @param lpTokenMinOut Minimum amount of LP tokens expected as output.
+     * @param deadline Deadline for the transaction.
+     */
     function pay(bytes32 id, uint256 pairTokenMinIn, uint256 pairTokenMaxIn, uint256 lpTokenMinOut, uint256 deadline) external {
         Subscription storage subscription = subscriptions[id];
         if (subscription.status != Status.Initiated) {
@@ -170,6 +193,13 @@ contract TrufPartner is Ownable2Step {
         emit Paid(id, pairTokenIn, lpAmount);
     }
 
+    /**
+     * @dev Ends a subscription, removes liquidity, and distributes rewards.
+     * @param id Identifier of the subscription.
+     * @param trufMinOut Minimum amount of TRUF tokens expected as output.
+     * @param pairTokenMinOut Minimum amount of paired tokens expected as output.
+     * @param deadline Deadline for the transaction.
+     */
     function end(bytes32 id, uint256 trufMinOut, uint256 pairTokenMinOut, uint256 deadline) external {
         _checkOwner();
 
@@ -208,6 +238,13 @@ contract TrufPartner is Ownable2Step {
         emit Ended(id, trufTokenOut, pairTokenOut, trufReward);
     }
 
+    /**
+     * @dev Cancels a subscription and refunds tokens to the subscriber.
+     * @param id Identifier of the subscription.
+     * @param trufMinOut Minimum amount of TRUF tokens expected as output.
+     * @param pairTokenMinOut Minimum amount of paired tokens expected as output.
+     * @param deadline Deadline for the transaction.
+     */
     function cancel(bytes32 id, uint256 trufMinOut, uint256 pairTokenMinOut, uint256 deadline) external {
         _checkOwner();
 
@@ -265,6 +302,9 @@ contract TrufPartner is Ownable2Step {
         }
     }
 
+    /**
+     * @dev Updates the reward debt based on total LP tokens staked.
+     */
     function _updateRewardDebt() internal {
         if (totalLpStaked == 0) return;
         uint256 reward = lpStaking.getReward();

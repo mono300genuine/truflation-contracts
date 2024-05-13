@@ -22,6 +22,7 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
     error ZeroAddress();
     error ZeroAmount();
+    error ZeroPoints();
     error Forbidden(address sender);
     error InvalidAmount();
     error InvalidAccount();
@@ -143,6 +144,11 @@ contract VotingEscrowTruf is ERC20Votes, IVotingEscrow {
 
         // duration checked inside previewPoints
         uint256 points = previewPoints(amount, duration);
+
+        if (points == 0) {
+            revert ZeroPoints();
+        }
+
         uint256 end = block.timestamp + duration;
 
         lockups[to].push(
