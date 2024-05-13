@@ -29,6 +29,7 @@ contract TrufPartnerTest is Test {
     address public pOwner;
     uint256 public trufAmount = 1000e18;
     uint256 public usdtTokenMaxIn = 4e9;
+    uint256 public usdtTokenMinIn = 3e9;
     uint256 public lpTokenMinOut = 1;
     uint256 public lpReward = 100e18;
 
@@ -295,7 +296,7 @@ contract TrufPartnerTest is Test {
 
         vm.startPrank(alice);
         vm.expectRevert(abi.encodeWithSignature("Forbidden(address)", alice));
-        trufPartner.pay(partnerId, usdtTokenMaxIn, 1, block.timestamp);
+        trufPartner.pay(partnerId, usdtTokenMinIn, usdtTokenMaxIn, 1, block.timestamp);
         vm.stopPrank();
     }
 
@@ -305,7 +306,7 @@ contract TrufPartnerTest is Test {
 
         vm.startPrank(pOwner);
         vm.expectRevert(abi.encodeWithSignature("InvalidStatus(bytes32)", partnerId));
-        trufPartner.pay(partnerId, usdtTokenMaxIn, 1, block.timestamp);
+        trufPartner.pay(partnerId, usdtTokenMinIn, usdtTokenMaxIn, 1, block.timestamp);
         vm.stopPrank();
     }
 
@@ -315,7 +316,7 @@ contract TrufPartnerTest is Test {
         vm.warp(block.timestamp + 86500);
         vm.startPrank(pOwner);
         vm.expectRevert(abi.encodeWithSignature("InvalidTimestamp()"));
-        trufPartner.pay(partnerId, usdtTokenMaxIn, 1, block.timestamp);
+        trufPartner.pay(partnerId, usdtTokenMinIn, usdtTokenMaxIn, 1, block.timestamp);
         vm.stopPrank();
     }
 
@@ -522,7 +523,7 @@ contract TrufPartnerTest is Test {
         startTime = block.timestamp + 86400;
         pToken.approve(address(trufPartner), pTokenAmount);
         usdtToken.approve(address(trufPartner), usdtTokenMaxIn);
-        trufPartner.pay(partnerId, usdtTokenMaxIn, lpTokenMinOut, block.timestamp);
+        trufPartner.pay(partnerId, usdtTokenMinIn, usdtTokenMaxIn, lpTokenMinOut, block.timestamp);
         vm.stopPrank();
     }
 

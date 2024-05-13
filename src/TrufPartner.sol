@@ -126,7 +126,7 @@ contract TrufPartner is Ownable2Step {
         emit Initiated(id, period, startTime, pToken, pTokenAmount, pOwner, trufAmount);
     }
 
-    function pay(bytes32 id, uint256 pairTokenMaxIn, uint256 lpTokenMinOut, uint256 deadline) external {
+    function pay(bytes32 id, uint256 pairTokenMinIn, uint256 pairTokenMaxIn, uint256 lpTokenMinOut, uint256 deadline) external {
         Subscription storage subscription = subscriptions[id];
         if (subscription.status != Status.Initiated) {
             revert InvalidStatus(id);
@@ -147,7 +147,7 @@ contract TrufPartner is Ownable2Step {
             subscription.trufAmount,
             pairTokenMaxIn,
             subscription.trufAmount,
-            0,
+            pairTokenMinIn,
             address(this),
             deadline
         );
