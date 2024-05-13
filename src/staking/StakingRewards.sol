@@ -10,6 +10,11 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../interfaces/IStakingRewards.sol";
 
+/**
+ * @title StakingRewards
+ * @author Truflation Team
+ * @dev A contract for distributing rewards to stakers, fork of Synthetix StakingRewards.
+ */
 contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2Step {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -47,18 +52,35 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
 
     /* ========== VIEWS ========== */
 
+    /**
+     * @dev Get the total supply of staked tokens.
+     * @return uint256 The total supply of staked tokens.
+     */
     function totalSupply() external view returns (uint256) {
         return _totalSupply;
     }
 
+    /**
+     * @dev Get the balance of the specified account.
+     * @param account The address of the account.
+     * @return uint256 The balance of the account.
+     */
     function balanceOf(address account) external view returns (uint256) {
         return _balances[account];
     }
 
+    /**
+     * @dev Get the last time the reward was applicable.
+     * @return uint256 The last time the reward was applicable.
+     */
     function lastTimeRewardApplicable() public view returns (uint256) {
         return block.timestamp < periodFinish ? block.timestamp : periodFinish;
     }
 
+    /**
+     * @dev Get the reward per token.
+     * @return uint256 The reward per token.
+     */
     function rewardPerToken() public view returns (uint256) {
         if (_totalSupply == 0) {
             return rewardPerTokenStored;
@@ -68,18 +90,31 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
         );
     }
 
+    /**
+     * @dev Get the amount of rewards earned by the specified account.
+     * @param account The address of the account.
+     * @return uint256 The amount of rewards earned by the account.
+     */
     function earned(address account) public view returns (uint256) {
         return _balances[account].mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(
             rewards[account]
         );
     }
 
+    /**
+     * @dev Get the total reward for the current duration.
+     * @return uint256 The total reward for the current duration.
+     */
     function getRewardForDuration() external view returns (uint256) {
         return rewardRate.mul(rewardsDuration);
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
+    /**
+     * @dev Stake a certain amount of tokens.
+     * @param amount The amount of tokens to stake.
+     */
     function stake(uint256 amount) external nonReentrant whenNotPaused updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         _totalSupply = _totalSupply.add(amount);
@@ -88,6 +123,10 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
         emit Staked(msg.sender, amount);
     }
 
+    /**
+     * @dev Withdraw a certain amount of staked tokens.
+     * @param amount The amount of tokens to withdraw.
+     */
     function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
         _totalSupply = _totalSupply.sub(amount);
@@ -96,6 +135,10 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
         emit Withdrawn(msg.sender, amount);
     }
 
+    /**
+     * @dev Get rewards for the caller.
+     * @return reward The amount of rewards to be claimed.
+     */
     function getReward() public nonReentrant updateReward(msg.sender) returns (uint256 reward) {
         reward = rewards[msg.sender];
         if (reward > 0) {
@@ -105,6 +148,9 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
         }
     }
 
+    /**
+     * @dev Withdraw all staked tokens and claim rewards.
+     */
     function exit() external {
         withdraw(_balances[msg.sender]);
         getReward();
@@ -112,6 +158,10 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
+    /**
+     * @dev Notify the contract about the amount of rewards to be distributed.
+     * @param reward The amount of rewards to be distributed.
+     */
     function notifyRewardAmount(uint256 reward) external onlyRewardsDistribution updateReward(address(0)) {
         if (block.timestamp >= periodFinish) {
             rewardRate = reward.div(rewardsDuration);
@@ -133,13 +183,21 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
         emit RewardAdded(reward);
     }
 
-    // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
+    /**
+     * @dev Recovers ERC20 tokens accidentally sent to this contract's address.
+     * @param tokenAddress The address of the ERC20 token contract.
+     * @param tokenAmount The amount of tokens to be recovered.
+     */
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
         require(tokenAddress != address(stakingToken), "Cannot withdraw the staking token");
         IERC20(tokenAddress).safeTransfer(msg.sender, tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
     }
 
+    /**
+     * @dev Sets the duration of the rewards distribution.
+     * @param _rewardsDuration The duration of the rewards distribution.
+     */
     function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
         require(
             block.timestamp > periodFinish,
@@ -152,6 +210,10 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
         emit RewardsDurationUpdated(rewardsDuration);
     }
 
+    /**
+     * @dev Sets the address of the rewards distributor.
+     * @param _rewardsDistribution The address of the rewards distributor.
+     */
     function setRewardsDistribution(address _rewardsDistribution) external onlyOwner {
         require(_rewardsDistribution != address(0), "Rewards Distribution cannot be 0");
         rewardsDistribution = _rewardsDistribution;

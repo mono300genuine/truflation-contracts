@@ -7,6 +7,11 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../interfaces/IVirtualStakingRewards.sol";
 
+/**
+ * @title VirtualStakingRewards
+ * @author Truflation Team
+ * @dev A contract for distributing rewards to stakers, fork of Synthetix StakingRewards.
+ */
 contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
     using SafeERC20 for IERC20;
 
@@ -73,18 +78,35 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
 
     /* ========== VIEWS ========== */
 
+    /**
+     * @dev Get the total supply of staked tokens.
+     * @return uint256 The total supply of staked tokens.
+     */
     function totalSupply() external view returns (uint256) {
         return _totalSupply;
     }
 
+    /**
+     * @dev Get the balance of the specified account.
+     * @param account The address of the account.
+     * @return uint256 The balance of the account.
+     */
     function balanceOf(address account) external view returns (uint256) {
         return _balances[account];
     }
 
+    /**
+     * @dev Get the last time the reward was applicable.
+     * @return uint256 The last time the reward was applicable.
+     */
     function lastTimeRewardApplicable() public view returns (uint256) {
         return block.timestamp < periodFinish ? block.timestamp : periodFinish;
     }
 
+    /**
+     * @dev Get the reward per token.
+     * @return uint256 The reward per token.
+     */
     function rewardPerToken() public view returns (uint256) {
         if (_totalSupply == 0) {
             return rewardPerTokenStored;
@@ -93,16 +115,30 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
             rewardPerTokenStored + (((lastTimeRewardApplicable() - lastUpdateTime) * rewardRate * 1e18) / _totalSupply);
     }
 
+    /**
+     * @dev Get the amount of rewards earned by the specified account.
+     * @param account The address of the account.
+     * @return uint256 The amount of rewards earned by the account.
+     */
     function earned(address account) public view returns (uint256) {
         return (_balances[account] * (rewardPerToken() - userRewardPerTokenPaid[account])) / 1e18 + rewards[account];
     }
 
+    /**
+     * @dev Get the total reward for the current duration.
+     * @return uint256 The total reward for the current duration.
+     */
     function getRewardForDuration() external view returns (uint256) {
         return rewardRate * rewardsDuration;
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
+    /**
+     * @dev Stake a certain amount of tokens.
+     * @param user The address of the user to stake for.
+     * @param amount The amount of tokens to stake.
+     */
     function stake(address user, uint256 amount) external updateReward(user) onlyOperator {
         if (amount == 0) {
             revert ZeroAmount();
@@ -115,6 +151,11 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
         emit Staked(user, amount);
     }
 
+    /**
+     * @dev Withdraw a certain amount of staked tokens.
+     * @param user The address of the user to stake for.
+     * @param amount The amount of tokens to withdraw.
+     */
     function withdraw(address user, uint256 amount) public updateReward(user) onlyOperator {
         if (amount == 0) {
             revert ZeroAmount();
@@ -124,6 +165,11 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
         emit Withdrawn(user, amount);
     }
 
+    /**
+     * @dev Get rewards for the caller.
+     * @param user The address of the user to stake for.
+     * @return reward The amount of rewards to be claimed.
+     */
     function getReward(address user, address to) public updateReward(user) onlyOperator returns (uint256 reward) {
         reward = rewards[user];
         if (reward != 0) {
@@ -135,6 +181,10 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
+    /**
+     * @dev Notify the contract about the amount of rewards to be distributed.
+     * @param reward The amount of rewards to be distributed.
+     */
     function notifyRewardAmount(uint256 reward) external onlyRewardsDistribution updateReward(address(0)) {
         if (block.timestamp >= periodFinish) {
             rewardRate = reward / rewardsDuration;
@@ -158,6 +208,10 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
         emit RewardAdded(reward);
     }
 
+    /**
+     * @dev Sets the duration of the rewards distribution.
+     * @param _rewardsDuration The duration of the rewards distribution.
+     */
     function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
         if (block.timestamp <= periodFinish) {
             revert RewardPeriodNotFinished();
@@ -171,6 +225,10 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
         emit RewardsDurationUpdated(_rewardsDuration);
     }
 
+    /**
+     * @dev Sets the address of the rewards distributor.
+     * @param _rewardsDistribution The address of the rewards distributor.
+     */
     function setRewardsDistribution(address _rewardsDistribution) external onlyOwner {
         if (_rewardsDistribution == address(0)) {
             revert ZeroAddress();
@@ -180,6 +238,10 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
         emit RewardsDistributionUpdated(_rewardsDistribution);
     }
 
+    /**
+     * @dev Sets the address of the operator.
+     * @param _operator The address of the operator.
+     */
     function setOperator(address _operator) external onlyOwner {
         if (_operator == address(0)) {
             revert ZeroAddress();
