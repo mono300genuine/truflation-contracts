@@ -59,7 +59,7 @@ contract VotingEscrowTrufTest is Test {
         veTRUF =
             new VotingEscrowTruf(address(trufToken), address(vesting), MIN_STAKE_DURATION, address(trufStakingRewards));
         trufStakingRewards.setOperator(address(veTRUF));
-        trufToken.transfer(address(trufStakingRewards), 200e18);
+        trufToken.approve(address(trufStakingRewards), 200e18);
         trufStakingRewards.notifyRewardAmount(200e18);
 
         vm.stopPrank();

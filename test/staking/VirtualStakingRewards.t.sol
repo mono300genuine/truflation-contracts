@@ -16,28 +16,28 @@ contract VirtualStakingRewardsTest is Test {
     address public bob;
     address public owner;
     address public operator;
-    address public rewardsDistribuion;
+    address public rewardsDistribution;
 
     function setUp() public {
         alice = address(uint160(uint256(keccak256(abi.encodePacked("Alice")))));
         bob = address(uint160(uint256(keccak256(abi.encodePacked("Bob")))));
         owner = address(uint160(uint256(keccak256(abi.encodePacked("Owner")))));
         operator = address(uint160(uint256(keccak256(abi.encodePacked("Operator")))));
-        rewardsDistribuion = address(uint160(uint256(keccak256(abi.encodePacked("RewardsDistribuion")))));
+        rewardsDistribution = address(uint160(uint256(keccak256(abi.encodePacked("RewardsDistribution")))));
 
         vm.label(alice, "Alice");
         vm.label(bob, "Bob");
         vm.label(owner, "Owner");
         vm.label(operator, "Operator");
-        vm.label(rewardsDistribuion, "RewardsDistribuion");
+        vm.label(rewardsDistribution, "RewardsDistribution");
 
         vm.warp(1696816730);
 
         vm.startPrank(owner);
         trufToken = new TruflationToken();
-        trufStakingRewards = new VirtualStakingRewards(rewardsDistribuion, address(trufToken));
+        trufStakingRewards = new VirtualStakingRewards(rewardsDistribution, address(trufToken));
         trufStakingRewards.setOperator(operator);
-        trufToken.transfer(rewardsDistribuion, trufToken.totalSupply());
+        trufToken.transfer(rewardsDistribution, trufToken.totalSupply());
 
         vm.stopPrank();
     }
@@ -46,14 +46,14 @@ contract VirtualStakingRewardsTest is Test {
         console.log("Check initial variables");
         assertEq(address(trufStakingRewards.rewardsToken()), address(trufToken), "Reward Token is invalid");
         assertEq(trufStakingRewards.owner(), owner, "Owner is invalid");
-        assertEq(trufStakingRewards.rewardsDistribution(), rewardsDistribuion, "rewardsDistribuion is invalid");
+        assertEq(trufStakingRewards.rewardsDistribution(), rewardsDistribution, "rewardsDistribution is invalid");
         assertEq(trufStakingRewards.totalSupply(), 0, "Initial supply is invalid");
     }
 
     function testConstructorFailure() external {
         console.log("Should revert if rewards token is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        new VirtualStakingRewards(rewardsDistribuion, address(0));
+        new VirtualStakingRewards(rewardsDistribution, address(0));
 
         console.log("Should revert if rewardsDistribution is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
@@ -382,9 +382,9 @@ contract VirtualStakingRewardsTest is Test {
         console.log("Notify rewards");
 
         uint256 rewards = 100e18;
-        vm.startPrank(rewardsDistribuion);
+        vm.startPrank(rewardsDistribution);
 
-        trufToken.transfer(address(trufStakingRewards), rewards);
+        trufToken.approve(address(trufStakingRewards), rewards);
 
         vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit RewardAdded(rewards);
@@ -398,7 +398,7 @@ contract VirtualStakingRewardsTest is Test {
     }
 
     function testNotifyRewardAmount_BeforePeriodFinish() external {
-        console.log("Notify rewards before pevious period end");
+        console.log("Notify rewards before previous period end");
 
         uint256 firstRewards = 100e18;
 
@@ -408,9 +408,9 @@ contract VirtualStakingRewardsTest is Test {
 
         vm.warp(block.timestamp + 3 days);
 
-        vm.startPrank(rewardsDistribuion);
+        vm.startPrank(rewardsDistribution);
 
-        trufToken.transfer(address(trufStakingRewards), rewards);
+        trufToken.approve(address(trufStakingRewards), rewards);
 
         vm.expectEmit(true, true, true, true, address(trufStakingRewards));
         emit RewardAdded(rewards);
@@ -424,20 +424,6 @@ contract VirtualStakingRewardsTest is Test {
             (firstRewards / 7 days * 4 days + rewards) / 7 days,
             "periodFinish is invalid"
         );
-
-        vm.stopPrank();
-    }
-
-    function testNotifyRewardAmount_Revert_WhenRewardIsLowerThanBalance() external {
-        console.log("Should revert if notified reward amount is lower than balance");
-
-        uint256 rewards = 100e18;
-        vm.startPrank(rewardsDistribuion);
-
-        trufToken.transfer(address(trufStakingRewards), rewards);
-
-        vm.expectRevert(abi.encodeWithSignature("InsufficientRewards()"));
-        trufStakingRewards.notifyRewardAmount(101e18);
 
         vm.stopPrank();
     }
@@ -505,9 +491,9 @@ contract VirtualStakingRewardsTest is Test {
     }
 
     function _notifyReward(uint256 amount) internal {
-        vm.startPrank(rewardsDistribuion);
+        vm.startPrank(rewardsDistribution);
 
-        trufToken.transfer(address(trufStakingRewards), amount);
+        trufToken.approve(address(trufStakingRewards), amount);
         trufStakingRewards.notifyRewardAmount(amount);
 
         vm.stopPrank();

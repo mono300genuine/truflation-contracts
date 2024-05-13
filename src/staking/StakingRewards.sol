@@ -163,6 +163,7 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
      * @param reward The amount of rewards to be distributed.
      */
     function notifyRewardAmount(uint256 reward) external onlyRewardsDistribution updateReward(address(0)) {
+        IERC20(rewardsToken).safeTransferFrom(msg.sender, address(this), reward);
         if (block.timestamp >= periodFinish) {
             rewardRate = reward.div(rewardsDuration);
         } else {
@@ -170,13 +171,6 @@ contract StakingRewards is IStakingRewards, ReentrancyGuard, Pausable, Ownable2S
             uint256 leftover = remaining.mul(rewardRate);
             rewardRate = reward.add(leftover).div(rewardsDuration);
         }
-
-        // Ensure the provided reward amount is not more than the balance in the contract.
-        // This keeps the reward rate in the right range, preventing overflows due to
-        // very high values of rewardRate in the earned and rewardsPerToken functions;
-        // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
-        uint256 balance = IERC20(rewardsToken).balanceOf(address(this));
-        require(rewardRate <= balance.div(rewardsDuration), "Provided reward too high");
 
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp.add(rewardsDuration);

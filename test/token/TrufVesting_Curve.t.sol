@@ -58,7 +58,7 @@ contract TrufVestingCurveTest is Test {
         vesting.setVeTruf(address(veTRUF));
 
         tfiStakingRewards.setRewardsDuration(30 days);
-        tfiToken.transfer(address(tfiStakingRewards), 100_000e18);
+        tfiToken.approve(address(tfiStakingRewards), 100_000e18);
         tfiStakingRewards.notifyRewardAmount(100_000e18);
 
         vesting.setVestingCategory(type(uint256).max, "Team & Recruitment", 130000000e15, false);

@@ -73,7 +73,8 @@ contract TrufPartnerTest is Test {
         vm.prank(gov);
         trufPartner.acceptOwnership();
 
-        trufToken.mint(address(lpStaking), lpReward);
+        trufToken.mint(address(this), lpReward);
+        trufToken.approve(address(lpStaking), lpReward);
         lpStaking.notifyRewardAmount(lpReward);
     }
 
