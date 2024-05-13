@@ -413,19 +413,20 @@ contract TrufVesting is Ownable2Step {
         VestingCategory storage category = categories[categoryId];
 
         uint256 claimableAmount = claimable(categoryId, vestingId, user);
-        if (giveUnclaimed && claimableAmount != 0) {
-            trufToken.safeTransfer(user, claimableAmount);
+        uint256 claimed = userVesting.claimed;
 
-            userVesting.claimed += claimableAmount;
-            category.totalClaimed += claimableAmount;
-            emit Claimed(categoryId, vestingId, user, claimableAmount);
-        }
-
-        uint256 unvested = userVesting.amount - userVesting.claimed;
+        uint256 unvested = userVesting.amount - (userVesting.claimed + (giveUnclaimed ? claimableAmount : 0));
 
         delete userVestings[categoryId][vestingId][user];
 
         category.allocated -= unvested;
+
+        if (giveUnclaimed && claimableAmount != 0) {
+            trufToken.safeTransfer(user, claimableAmount);
+
+            category.totalClaimed += claimableAmount;
+            emit Claimed(categoryId, vestingId, user, claimableAmount);
+        }
 
         emit CancelVesting(categoryId, vestingId, user, giveUnclaimed);
     }
