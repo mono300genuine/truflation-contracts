@@ -144,11 +144,12 @@ contract TrufPartner is Ownable2Step {
     /**
      * @dev Pays for a subscription, adding liquidity and staking LP tokens.
      * @param id Identifier of the subscription.
+     * @param pairTokenMinIn Minimum amount of paired tokens to be deposited.
      * @param pairTokenMaxIn Maximum amount of paired tokens to be deposited.
      * @param lpTokenMinOut Minimum amount of LP tokens expected as output.
      * @param deadline Deadline for the transaction.
      */
-    function pay(bytes32 id, uint256 pairTokenMaxIn, uint256 lpTokenMinOut, uint256 deadline) external {
+    function pay(bytes32 id, uint256 pairTokenMinIn, uint256 pairTokenMaxIn, uint256 lpTokenMinOut, uint256 deadline) external {
         Subscription storage subscription = subscriptions[id];
         if (subscription.status != Status.Initiated) {
             revert InvalidStatus(id);
@@ -169,7 +170,7 @@ contract TrufPartner is Ownable2Step {
             subscription.trufAmount,
             pairTokenMaxIn,
             subscription.trufAmount,
-            0,
+            pairTokenMinIn,
             address(this),
             deadline
         );
