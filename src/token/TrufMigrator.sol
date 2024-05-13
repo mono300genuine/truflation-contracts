@@ -4,74 +4,82 @@ pragma solidity 0.8.25;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title TrufMigrator smart contract
- * @author Ryuhei Matsuda
- * @notice Users could claim tokens based on snapshot(stored by merkle tree).
+ * @author Truflation Team
+ * @notice Users can claim tokens based on a snapshot we create, the backend will give them "approval" to claim using an ECDSA signature.
  */
 contract TrufMigrator is Ownable2Step {
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
 
-    error InvalidProof();
+    /********************** Errors ***********************/
+
+    error InvalidSignature();
     error AlreadyMigrated();
 
-    event SetMerkleRoot(bytes32 merkleRoot);
+    /********************** Events ***********************/
+
     event Migrated(address indexed user, uint256 amount);
 
-    IERC20 public immutable trufToken;
-    bytes32 public merkleRoot;
+    /********************** Constants ***********************/
+
+    address public immutable SIGNER;
+    IERC20 public immutable TRUF_TOKEN;
+
+    /********************** Storage ***********************/
+
     mapping(address => uint256) public migratedAmount;
 
-    constructor(address _trufToken) {
-        trufToken = IERC20(_trufToken);
+    /********************** Constructor ***********************/
+
+    constructor(address _trufToken, address _signer) {
+        TRUF_TOKEN = IERC20(_trufToken);
+        SIGNER = _signer;
     }
 
-    /**
-     * Set merkle root
-     * @notice Only owner can call
-     * @param _merkleRoot Merkle root
-     */
-    function setMerkleRoot(bytes32 _merkleRoot) external onlyOwner {
-        merkleRoot = _merkleRoot;
-
-        emit SetMerkleRoot(_merkleRoot);
-    }
+    /********************** Core Functions ***********************/
 
     /**
-     * Claim new TRUF token based on snapshot(merkle tree)
-     * @param index index of leaf
-     * @param amount token amount
-     * @param proof merkle proof
+     * Claim new TRUF token based on snapshot
+     * @param maxMigrationAmount the maximum allowed migration amount
+     * @param v the v parameter of the signature
+     * @param r the r parameter of the signature
+     * @param s the s parameter of the signature
      */
-    function migrate(uint256 index, uint256 amount, bytes32[] calldata proof) external {
-        bytes32 leaf = keccak256(abi.encode(msg.sender, index, amount));
-
-        if (MerkleProof.verify(proof, merkleRoot, leaf) == false) {
-            revert InvalidProof();
-        }
+    function migrate(uint256 maxMigrationAmount, uint8 v, bytes32 r, bytes32 s) external {
+        if(verify(msg.sender, maxMigrationAmount, v, r, s) == false) revert InvalidSignature();
 
         uint256 _migratedAmount = migratedAmount[msg.sender];
 
-        if (amount <= _migratedAmount) {
+        if (maxMigrationAmount <= _migratedAmount) {
             revert AlreadyMigrated();
         }
 
-        migratedAmount[msg.sender] = amount;
+        migratedAmount[msg.sender] = maxMigrationAmount;
 
-        uint256 migrateAmount = amount - _migratedAmount;
-        trufToken.safeTransfer(msg.sender, migrateAmount);
+        uint256 migrationAmount = maxMigrationAmount - _migratedAmount;
+        TRUF_TOKEN.safeTransfer(msg.sender, migrationAmount);
 
-        emit Migrated(msg.sender, migrateAmount);
+        emit Migrated(msg.sender, migrationAmount);
     }
 
+    /********************** Owner Only Functions ***********************/
+
     /**
-     * Withdraw TRUF tokens if we sent more tokens
+     * Withdraw TRUF tokens
      * @notice Only owner can call
-     * @param amount Withdrawal amount
+     * @param amount withdrawal amount
      */
     function withdrawTruf(uint256 amount) external onlyOwner {
-        trufToken.safeTransfer(msg.sender, amount);
+        TRUF_TOKEN.safeTransfer(msg.sender, amount);
+    }
+
+    /********************** Internal Functions ***********************/
+
+    function verify(address user, uint256 maxMigrationAmount, uint8 v, bytes32 r, bytes32 s) public view returns(bool) {
+        return keccak256(abi.encodePacked(user, maxMigrationAmount)).toEthSignedMessageHash().recover(v, r, s) == SIGNER;
     }
 }

@@ -1,215 +1,99 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.25;
 
-import "forge-std/console.sol";
-import "forge-std/Test.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "murky/src/Merkle.sol";
-import "../../src/token/TruflationToken.sol";
-import "../../src/token/TrufMigrator.sol";
+import {Test} from "forge-std/Test.sol";
+import {TruflationToken} from "../../src/token/TruflationToken.sol";
+import {TrufMigrator} from "../../src/token/TrufMigrator.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract TrufMigratorTest is Test, Merkle {
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event SetMerkleRoot(bytes32 merkleRoot);
-    event Migrated(address indexed user, uint256 amount);
+contract TrufMigratorTest is Test {
+    using ECDSA for bytes32;
 
-    TruflationToken public trufToken;
+    TruflationToken public tfiToken;
     TrufMigrator public trufMigrator;
 
-    // Users
-    address public alice;
-    address public owner;
+    uint256 constant MOCK_PK = uint256(keccak256("MOCK_PK"));
+    address MOCK_PK_OWNER;
 
-    function setUp() public {
-        alice = address(uint160(uint256(keccak256(abi.encodePacked("Alice")))));
-        owner = address(uint160(uint256(keccak256(abi.encodePacked("Owner")))));
+    function reset() internal {
+        MOCK_PK_OWNER = vm.addr(MOCK_PK);
+        tfiToken = new TruflationToken();
+        trufMigrator = new TrufMigrator(address(tfiToken), MOCK_PK_OWNER);
 
-        vm.label(alice, "Alice");
-        vm.label(owner, "Owner");
+        tfiToken.transfer(address(trufMigrator), tfiToken.balanceOf(address(this)));
+    }
 
-        vm.startPrank(owner);
-        trufToken = new TruflationToken();
-        trufMigrator = new TrufMigrator(address(trufToken));
+    function testValidMigration() external {
+        reset();
 
-        trufToken.transfer(address(trufMigrator), 1e24);
+        address user = address(bytes20(keccak256("user")));
 
+        (uint8 v, bytes32 r, bytes32 s) = _getValidMigrationSignature(user, 10e18);
+
+        vm.prank(user, user);
+        trufMigrator.migrate(10e18, v, r, s);
+        
+        assertEq(tfiToken.balanceOf(user), 10e18, "Invalid TRUF balance after migration 1");
+
+        (v, r, s) = _getValidMigrationSignature(user, 5e18);
+
+        vm.startPrank(user, user);
+        vm.expectRevert(TrufMigrator.AlreadyMigrated.selector);
+        trufMigrator.migrate(5e18, v, r, s);
+        vm.stopPrank();
+        
+        assertEq(tfiToken.balanceOf(user), 10e18, "Invalid TRUF balance after migration 2");
+
+        (v, r, s) = _getValidMigrationSignature(user, 15e18);
+
+        vm.prank(user, user);
+        trufMigrator.migrate(15e18, v, r, s);
+        
+        assertEq(tfiToken.balanceOf(user), 15e18, "Invalid TRUF balance after migration 3");
+    }
+
+    function testInvalidUserMigration() external {
+        reset();
+
+        address user1 = address(bytes20(keccak256("user1")));
+        address user2 = address(bytes20(keccak256("user2")));
+
+        (uint8 v, bytes32 r, bytes32 s) = _getValidMigrationSignature(user1, 10e18);
+
+        vm.startPrank(user2, user2);
+        vm.expectRevert(TrufMigrator.InvalidSignature.selector);
+        trufMigrator.migrate(10e18, v, r, s);
         vm.stopPrank();
     }
 
-    function testConstructorSuccess() external {
-        console.log("Check initial variables");
-        assertEq(address(trufMigrator.trufToken()), address(trufToken), "TRUF token is invalid");
-        assertEq(trufMigrator.owner(), owner, "Owner is invalid");
-    }
+    function testInvalidAmountMigration() external {
+        reset();
 
-    function testSetMerkleRoot() external {
-        bytes32 fakeMerkleRoot = keccak256("Fake Merkle Root");
+        address user = address(bytes20(keccak256("user")));
 
-        vm.startPrank(owner);
-        vm.expectEmit(true, true, true, true, address(trufMigrator));
-        emit SetMerkleRoot(fakeMerkleRoot);
+        (uint8 v, bytes32 r, bytes32 s) = _getValidMigrationSignature(user, 10e18);
 
-        trufMigrator.setMerkleRoot(fakeMerkleRoot);
-
+        vm.startPrank(user, user);
+        vm.expectRevert(TrufMigrator.InvalidSignature.selector);
+        trufMigrator.migrate(100e18, v, r, s);
         vm.stopPrank();
-
-        assertEq(trufMigrator.merkleRoot(), fakeMerkleRoot, "Merkle root is invalid");
     }
 
-    function testSetMerkleRootFailures() external {
-        console.log("Revert if msg.sender is not owner");
+    function testOwnerOnly() external {
+        reset();
 
-        bytes32 fakeMerkleRoot = keccak256("Fake Merkle Root");
+        address user = address(bytes20(keccak256("user")));
 
-        vm.startPrank(alice);
+        vm.startPrank(user, user);
         vm.expectRevert("Ownable: caller is not the owner");
-
-        trufMigrator.setMerkleRoot(fakeMerkleRoot);
-
+        trufMigrator.withdrawTruf(1e18);
         vm.stopPrank();
+
+        trufMigrator.withdrawTruf(1e18);
+        assertEq(tfiToken.balanceOf(address(this)), 1e18, "withdrawTruf did not send the tokens");
     }
 
-    function testMigrate() external {
-        (address[] memory users, uint256[] memory amounts, bytes32[] memory leaves,) = _setupMerkleRoot();
-
-        uint256 index = 3;
-        address user = users[index];
-        uint256 amount = amounts[index];
-
-        vm.startPrank(user);
-        vm.expectEmit(true, true, true, true, address(trufMigrator));
-        emit Migrated(user, amount);
-
-        trufMigrator.migrate(index, amount, getProof(leaves, index));
-
-        vm.stopPrank();
-
-        assertEq(trufMigrator.migratedAmount(user), amount, "Migrated amount is invalid");
-        assertEq(trufToken.balanceOf(user), amount, "User did not receive TRUF token");
-    }
-
-    function testMigrate_More() external {
-        console.log("Allow users to migrate again if there are additional amounts added after new merkle root added");
-
-        (address[] memory users, uint256[] memory amounts, bytes32[] memory leaves,) = _setupMerkleRoot();
-
-        uint256 addedAmount = 15e19;
-
-        uint256 index = 3;
-        address user = users[index];
-        uint256 amount = amounts[index];
-
-        vm.startPrank(user);
-
-        trufMigrator.migrate(index, amount, getProof(leaves, index));
-
-        vm.stopPrank();
-
-        amounts[index] += addedAmount;
-
-        (bytes32[] memory newLeaves, bytes32 merkleRoot) = _generateMerkleRoot(users, amounts);
-
-        vm.startPrank(owner);
-
-        trufMigrator.setMerkleRoot(merkleRoot);
-
-        vm.stopPrank();
-
-        vm.startPrank(user);
-        vm.expectEmit(true, true, true, true, address(trufMigrator));
-        emit Migrated(user, addedAmount);
-
-        trufMigrator.migrate(index, amounts[index], getProof(newLeaves, index));
-
-        vm.stopPrank();
-
-        assertEq(trufMigrator.migratedAmount(user), amounts[index], "Migrated amount is invalid");
-        assertEq(trufToken.balanceOf(user), amounts[index], "User did not receive TRUF token");
-    }
-
-    function testMigrateFailures() external {
-        (address[] memory users, uint256[] memory amounts, bytes32[] memory leaves,) = _setupMerkleRoot();
-
-        uint256 index = 3;
-        address user = users[index];
-        uint256 amount = amounts[index];
-
-        vm.startPrank(user);
-
-        console.log("Revert if proof is invalid");
-        vm.expectRevert(abi.encodeWithSignature("InvalidProof()"));
-
-        trufMigrator.migrate(index, amount, getProof(leaves, index + 1));
-
-        console.log("Revert if already migrated");
-        trufMigrator.migrate(index, amount, getProof(leaves, index));
-
-        vm.expectRevert(abi.encodeWithSignature("AlreadyMigrated()"));
-
-        trufMigrator.migrate(index, amount, getProof(leaves, index));
-
-        vm.stopPrank();
-    }
-
-    function testWithdrawTruf() external {
-        uint256 amount = 1e18;
-
-        vm.startPrank(owner);
-
-        vm.expectEmit(true, true, true, true, address(trufToken));
-        emit Transfer(address(trufMigrator), owner, amount);
-        trufMigrator.withdrawTruf(amount);
-
-        vm.stopPrank();
-    }
-
-    function testWithdrawTrufFailures() external {
-        console.log("Revert if msg.sender is not owner");
-
-        vm.startPrank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-
-        trufMigrator.withdrawTruf(100);
-
-        vm.stopPrank();
-    }
-
-    function _setupMerkleRoot()
-        internal
-        returns (address[] memory users, uint256[] memory amounts, bytes32[] memory leaves, bytes32 merkleRoot)
-    {
-        (users, amounts) = _getExampleSnapshot();
-        (leaves, merkleRoot) = _generateMerkleRoot(users, amounts);
-
-        vm.startPrank(owner);
-
-        trufMigrator.setMerkleRoot(merkleRoot);
-
-        vm.stopPrank();
-    }
-
-    function _getExampleSnapshot() internal pure returns (address[] memory users, uint256[] memory amounts) {
-        uint256 userLen = 10;
-        users = new address[](userLen);
-        amounts = new uint256[](userLen);
-
-        for (uint256 i = 0; i < userLen; i += 1) {
-            users[i] = address(uint160(uint256(keccak256(abi.encodePacked("User", i)))));
-            amounts[i] = 1e18 * ((i + 3) % userLen + 1);
-        }
-    }
-
-    function _generateMerkleRoot(address[] memory users, uint256[] memory amounts)
-        internal
-        pure
-        returns (bytes32[] memory leaves, bytes32 merkleRoot)
-    {
-        leaves = new bytes32[](users.length);
-
-        for (uint256 i = 0; i < users.length; i += 1) {
-            leaves[i] = keccak256(abi.encode(users[i], i, amounts[i]));
-        }
-
-        merkleRoot = getRoot(leaves);
+    function _getValidMigrationSignature(address user, uint256 amount) internal pure returns(uint8 v, bytes32 r, bytes32 s) {
+        return vm.sign(MOCK_PK, keccak256(abi.encodePacked(user, amount)).toEthSignedMessageHash());
     }
 }
