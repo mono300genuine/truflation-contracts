@@ -243,6 +243,10 @@ contract VotingEscrowTrufTest is Test {
         vm.expectRevert(abi.encodeWithSignature("ZeroAmount()"));
         veTRUF.stake(0, 30 days, bob);
 
+        console.log("Revert if points is 0");
+        vm.expectRevert(abi.encodeWithSignature("ZeroPoints()"));
+        veTRUF.stake(1, MIN_STAKE_DURATION, bob);
+
         console.log("Revert if to is address(0)");
         vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
         veTRUF.stake(100e18, 30 days, address(0));
