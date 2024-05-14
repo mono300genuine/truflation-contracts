@@ -152,7 +152,7 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
 
     /**
      * @dev Withdraw a certain amount of staked tokens.
-     * @param user The address of the user to stake for.
+     * @param user The address of the user to withdraw for.
      * @param amount The amount of tokens to withdraw.
      */
     function withdraw(address user, uint256 amount) public updateReward(user) onlyOperator {
@@ -166,7 +166,8 @@ contract VirtualStakingRewards is IVirtualStakingRewards, Ownable2Step {
 
     /**
      * @dev Get rewards for the caller.
-     * @param user The address of the user to stake for.
+     * @param user The address of the user that owns the rewards.
+     * @param to The address of the user to send the rewards to.
      * @return reward The amount of rewards to be claimed.
      */
     function getReward(address user, address to) public updateReward(user) onlyOperator returns (uint256 reward) {
