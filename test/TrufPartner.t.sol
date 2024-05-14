@@ -192,7 +192,7 @@ contract TrufPartnerTest is Test {
 
     function testInitiateFailureIfStartTimeIsLowerThanCurrentTime() external {
         trufToken.mint(gov, trufAmount * 2);
-        startTime = block.timestamp + 86400;
+        startTime = block.timestamp - 1;
 
         vm.startPrank(gov);
 
@@ -200,7 +200,22 @@ contract TrufPartnerTest is Test {
 
         console.log("Should revert if startTime is lower than current timestamp");
         vm.expectRevert(abi.encodeWithSignature("InvalidTimestamp()"));
-        trufPartner.initiate(partnerId, period, block.timestamp - 1, address(pToken), pTokenAmount, pOwner, trufAmount);
+        trufPartner.initiate(partnerId, period, startTime, address(pToken), pTokenAmount, pOwner, trufAmount);
+
+        vm.stopPrank();
+    }
+
+    function testInitiateFailureIfStartTimeIsOverAYearInTheFuture() external {
+        trufToken.mint(gov, trufAmount * 2);
+        startTime = block.timestamp + 365 days + 1;
+
+        vm.startPrank(gov);
+
+        trufToken.approve(address(trufPartner), trufAmount * 2);
+
+        console.log("Should revert if startTime is more than a year in the future");
+        vm.expectRevert(abi.encodeWithSignature("InvalidTimestamp()"));
+        trufPartner.initiate(partnerId, period, startTime, address(pToken), pTokenAmount, pOwner, trufAmount);
 
         vm.stopPrank();
     }

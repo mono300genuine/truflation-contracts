@@ -116,7 +116,7 @@ contract TrufPartner is Ownable2Step {
         if (period == 0 || pTokenAmount == 0 || trufAmount == 0) {
             revert ZeroAmount();
         }
-        if (startTime < block.timestamp) revert InvalidTimestamp();
+        if (startTime < block.timestamp || startTime - block.timestamp > 365 days) revert InvalidTimestamp();
         if (pToken == address(0) || pOwner == address(0)) {
             revert ZeroAddress();
         }
